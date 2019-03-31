@@ -101,6 +101,12 @@ class Experiment():
         else:
             self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
 
+    def create_docker_image(self):
+        cmd_list = [Experiment.DOCKER, "build", "-t", "kcratie/ringroute:0.0", "."]
+        resp = Experiment.runshell(cmd_list)
+        if self.args.verbose:
+            print(resp)
+
     def random_start_all(self):
         args = ["--rm", "--privileged"]
         opts = "-itd"
