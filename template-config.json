@@ -31,7 +31,10 @@
         "Name": "ApplicationOverlay",
         "Description": "Scalable Structured Ring Overlay",
         "MaxSuccessors": 1,
-        "MaxLongDistEdges": 2
+        "MaxLongDistEdges": 4,
+        "MaxOnDemandEdges": 2,
+        "MaxConcurrentEdgeSetup": 3,
+        "Role": "Switch"
       }
     }
   },

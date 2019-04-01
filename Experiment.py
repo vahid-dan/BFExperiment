@@ -11,11 +11,13 @@ import pickle
 import argparse
 import shutil
 
+
 class Experiment():
 
-    RANGE_START=10
-    RANGE_END=20
+    RANGE_START = 10
+    RANGE_END = 20
     DOCKER = spawn.find_executable("docker")
+    CONTAINER = "ipop-dkr{0}"
 
     def __init__(self, exp_dir=None):
         parser = argparse.ArgumentParser(description="Configures and runs Ken's PhD Experiment")
@@ -25,8 +27,10 @@ class Experiment():
                             help="Generates the config files and directories")
         parser.add_argument("-v", action="store_true", default=False, dest="verbose",
                             help="Print on screen activity report")
-        parser.add_argument("-run", action="store_true", default=True, dest="run",
+        parser.add_argument("-run", action="store_true", default=False, dest="run",
                             help="Runs the currently configured experiment")
+        parser.add_argument("-end", action="store_true", default=False, dest="end",
+                            help="End the currently running experiment")
 
         self.args = parser.parse_args()
         self.total_inst = Experiment.RANGE_END - Experiment.RANGE_START
@@ -34,10 +38,10 @@ class Experiment():
         self.exp_dir = exp_dir
         if not self.exp_dir:
             self.exp_dir = os.path.abspath(".")
-        self.template_file="{0}/template-config.json".format(self.exp_dir)
-        self.config_dir="{0}/config".format(self.exp_dir)
-        self.log_dir="{0}/log".format(self.exp_dir)
-        self.config_file="{0}/config/config-dkr".format(self.exp_dir)
+        self.template_file = "{0}/template-config.json".format(self.exp_dir)
+        self.config_dir = "{0}/config".format(self.exp_dir)
+        self.log_dir = "{0}/log".format(self.exp_dir)
+        self.config_file = "{0}/config/config-dkr".format(self.exp_dir)
         self.seq_file = "{0}/startup.list".format(self.exp_dir)
 
     @classmethod
@@ -48,7 +52,6 @@ class Experiment():
             err = "Subprocess: \"{0}\" failed, std err = {1}".format(str(cmd), str(p.stderr))
             raise RuntimeError(err)
         return p
-
 
     def gen_config(self, range_start, range_end):
         with open(self.template_file) as fd:
@@ -61,7 +64,7 @@ class Experiment():
             rng_str = str(val)
             filename = "{0}{1}.json".format(self.config_file, val)
             node_id = "{0}{1}{2}{3}{4}".format(node_id[:5], rng_str, node_id[7:30],
-                                                   rng_str, node_id[32:])
+                                               rng_str, node_id[32:])
             node_name = "{0}{1}".format(node_name[:3], rng_str)
             node_ip = "{0}{1}".format(node_ip[:10], rng_str)
 
@@ -117,15 +120,16 @@ class Experiment():
             cfg_file = "{0}/config/config-dkr{1}.json".format(self.exp_dir, inst)
             if not os.path.isfile(cfg_file):
                 self.gen_config(inst, inst+1)
-            continer = "ipop-dkr{0}".format(inst)
+            continer = Experiment.CONTAINER.format(inst)
             mount_cfg = "{0}/config/config-dkr{1}.json:/etc/opt/ipop-vpn/config.json".\
                 format(self.exp_dir, inst)
             mount_log = "{0}/log/dkr{1}/:/var/log/ipop-vpn/".format(self.exp_dir, inst)
-            cmd_list = [Experiment.DOCKER, "run", opts, "-v", mount_cfg, "-v", mount_log, args[0], args[1], "--name", continer, img, cmd]
+            cmd_list = [Experiment.DOCKER, "run", opts, "-v", mount_cfg, "-v", mount_log,
+                        args[0], args[1], "--name", continer, img, cmd]
             resp = Experiment.runshell(cmd_list)
             if self.args.verbose:
-                print(resp)
-                #print(cmd_list)
+                print(str(resp.stdout) if resp.returncode == 0 else str(resp.stderr))
+                # print(cmd_list)
         if self.args.verbose:
             print("{} docker container(s) instantiated".format(len(self.seq_list)))
 
@@ -147,7 +151,7 @@ class Experiment():
                 print("Removed dir {}".format(self.log_dir))
 
     def run(self):
-        #if not os.path.isdir(self.CFG_DIR):
+        # if not os.path.isdir(self.CFG_DIR):
         #    self.gen_config(Experiment.RANGE_START, Experiment.RANGE_END)
         if os.path.isfile(self.seq_file):
             self.load_seq_list()
@@ -155,15 +159,32 @@ class Experiment():
             self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
         self.random_start_all()
 
+    def stop_all_containers(self):
+        for inst in range(Experiment.RANGE_START, Experiment.RANGE_END):
+            container = Experiment.CONTAINER.format(inst)
+            cmd_list = [Experiment.DOCKER, "stop", container]
+            resp = Experiment.runshell(cmd_list)
+            if self.args.verbose:
+                print(str(resp.stdout) if resp.returncode == 0 else str(resp.stderr))
+
+
 def main():
     exp = Experiment()
+    if exp.args.run and exp.args.end:
+        print("Error! Both run and end were specified.")
+        return
+
+    if exp.args.end:
+        exp.stop_all_containers()
+        return
+
     if exp.args.clean:
         exp.make_clean()
         return
 
     if Experiment.RANGE_END - Experiment.RANGE_START <= 0:
-        print("Invalid range {0}, please fix RANGE_START={1} RANGE_END={2}".\
-            format(Experiment.RANGE_START, Experiment.RANGE_END))
+        print("Invalid range {0}, please fix RANGE_START={1} RANGE_END={2}".
+              format(Experiment.RANGE_START, Experiment.RANGE_END))
         return
 
     if exp.args.configure:
@@ -174,6 +195,7 @@ def main():
 
     if exp.args.run:
         exp.run()
+
 
 if __name__ == "__main__":
     main()
