@@ -10,12 +10,12 @@ from distutils import spawn
 import pickle
 import argparse
 import shutil
-
+import time
 
 class Experiment():
 
     RANGE_START = 10
-    RANGE_END = 20
+    RANGE_END = 15
     DOCKER = spawn.find_executable("docker")
     CONTAINER = "ipop-dkr{0}"
 
@@ -48,9 +48,9 @@ class Experiment():
     def runshell(cls, cmd):
         """ Run a shell command. if fails, raise an exception. """
         p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if p.returncode != 0:
-            err = "Subprocess: \"{0}\" failed, std err = {1}".format(str(cmd), str(p.stderr))
-            raise RuntimeError(err)
+        #if p.returncode != 0:
+        #    err = "Subprocess: \"{0}\" failed, std err = {1}".format(str(cmd), str(p.stderr))
+        #    raise RuntimeError(err)
         return p
 
     def gen_config(self, range_start, range_end):
@@ -105,17 +105,20 @@ class Experiment():
             self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
 
     def create_docker_image(self):
-        cmd_list = [Experiment.DOCKER, "build", "-t", "kcratie/ringroute:0.0", "."]
+        cmd_list = [Experiment.DOCKER, "build", "-f", "ipop.Dockerfile", "-t", "kcratie/ringroute:0.1", "."]
         resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(resp)
 
-    def random_start_all(self):
+    def random_start_all(self, num, wait):
         args = ["--rm", "--privileged"]
-        opts = "-itd"
-        img = "kcratie/ringroute:0.0"
+        opts = "-d"
+        img = "kcratie/ringroute:0.1"
         cmd = "/sbin/init"
+        cnt = 1
         for inst in self.seq_list:
+            if cnt % num == 0:
+                time.sleep(wait)
             os.makedirs(self.log_dir+"/dkr{0}".format(inst), exist_ok=True)
             cfg_file = "{0}/config/config-dkr{1}.json".format(self.exp_dir, inst)
             if not os.path.isfile(cfg_file):
@@ -124,12 +127,16 @@ class Experiment():
             mount_cfg = "{0}/config/config-dkr{1}.json:/etc/opt/ipop-vpn/config.json".\
                 format(self.exp_dir, inst)
             mount_log = "{0}/log/dkr{1}/:/var/log/ipop-vpn/".format(self.exp_dir, inst)
+            core_dir = "{0}/cores/{1}/".format(self.exp_dir, continer)
+            os.makedirs(core_dir, exist_ok=True)
+            mount_core = "{0}:/var/cores/".format(core_dir)
             cmd_list = [Experiment.DOCKER, "run", opts, "-v", mount_cfg, "-v", mount_log,
-                        args[0], args[1], "--name", continer, img, cmd]
+                        "-v", mount_core, args[0], args[1], "--name", continer, img, cmd]
             resp = Experiment.runshell(cmd_list)
+            cnt += 1
             if self.args.verbose:
-                print(str(resp.stdout) if resp.returncode == 0 else str(resp.stderr))
-                # print(cmd_list)
+                print(resp.stdout.decode("utf-8") if resp.returncode == 0 else resp.stderr.decode("utf-8"))
+                print(cmd_list)
         if self.args.verbose:
             print("{} docker container(s) instantiated".format(len(self.seq_list)))
 
@@ -157,7 +164,10 @@ class Experiment():
             self.load_seq_list()
         else:
             self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
-        self.random_start_all()
+        if os.path.isdir(self.log_dir):
+            shutil.rmtree(self.log_dir)
+
+        self.random_start_all(6, 15)
 
     def stop_all_containers(self):
         for inst in range(Experiment.RANGE_START, Experiment.RANGE_END):
@@ -165,7 +175,7 @@ class Experiment():
             cmd_list = [Experiment.DOCKER, "stop", container]
             resp = Experiment.runshell(cmd_list)
             if self.args.verbose:
-                print(str(resp.stdout) if resp.returncode == 0 else str(resp.stderr))
+                print(resp.stdout.decode("utf-8") if resp.returncode == 0 else resp.stderr.decode("utf-8"))
 
 
 def main():

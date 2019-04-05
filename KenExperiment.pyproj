@@ -28,6 +28,10 @@
     <Compile Include="Experiment.py" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="container-cmd.sh" />
+    <Content Include="ipop.Dockerfile" />
+    <Content Include="prereq.Dockerfile" />
+    <Content Include="setup-prereqs.sh" />
     <Content Include="template-config.json" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
