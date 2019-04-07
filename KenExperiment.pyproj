@@ -13,7 +13,7 @@
     <Name>KenExperiment</Name>
     <RootNamespace>config-gen</RootNamespace>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>-v -end</CommandLineArguments>
+    <CommandLineArguments>-v -clean</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -28,10 +28,8 @@
     <Compile Include="Experiment.py" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="container-cmd.sh" />
-    <Content Include="ipop.Dockerfile" />
-    <Content Include="prereq.Dockerfile" />
-    <Content Include="setup-prereqs.sh" />
+    <Content Include="setup-docker.sh" />
+    <Content Include="setup-python.sh" />
     <Content Include="template-config.json" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
