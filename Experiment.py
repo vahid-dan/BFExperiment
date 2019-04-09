@@ -15,7 +15,8 @@ import time
 class Experiment():
 
     RANGE_START = 10
-    RANGE_END = 15
+    RANGE_END = 20
+    LAUNCH_WAIT = 18
     DOCKER = spawn.find_executable("docker")
     APT = spawn.find_executable("apt-get")
     CONTAINER = "ipop-dkr{0}"
@@ -156,8 +157,8 @@ class Experiment():
         for inst in sequence:
             if cnt % num == 0:
                 time.sleep(wait)
-                self.start_instance(inst)
-                cnt += 1
+            self.start_instance(inst)
+            cnt += 1
         if self.args.verbose:
             print("{0} docker container(s) instantiated".format(len(self.seq_list)))
 
@@ -194,16 +195,18 @@ class Experiment():
         if os.path.isdir(self.logs_dir):
             shutil.rmtree(self.logs_dir)
 
-        self.start_all(3, 120, "random")
+        self.start_all(3, Experiment.LAUNCH_WAIT, "random")
 
     def stop_all_containers(self):
+        cmd_list = [Experiment.DOCKER, "stop"]
         for inst in range(Experiment.RANGE_START, Experiment.RANGE_END):
             container = Experiment.CONTAINER.format(inst)
-            cmd_list = [Experiment.DOCKER, "stop", container]
-            resp = Experiment.runshell(cmd_list)
-            if self.args.verbose:
-                print(resp.stdout.decode("utf-8") if resp.returncode == 0 else \
-                    resp.stderr.decode("utf-8"))
+            cmd_list.append(container)
+        resp = Experiment.runshell(cmd_list)
+        if self.args.verbose:
+            print(cmd_list)
+            print(resp.stdout.decode("utf-8") if resp.returncode == 0 else \
+                resp.stderr.decode("utf-8"))
 
     def display_current_config(self):
         print("----Experiment Configuration----")
