@@ -13,7 +13,7 @@
     <Name>KenExperiment</Name>
     <RootNamespace>config-gen</RootNamespace>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>-v -clean</CommandLineArguments>
+    <CommandLineArguments>-v -clean -configure -run</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -28,9 +28,17 @@
     <Compile Include="Experiment.py" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="docker\99fixbadproxy" />
+    <Content Include="docker\ipop.Dockerfile" />
+    <Content Include="docker\prereq.Dockerfile" />
+    <Content Include="docker\setup-prereqs.sh" />
     <Content Include="setup-docker.sh" />
     <Content Include="setup-python.sh" />
+    <Content Include="setup-system.sh" />
     <Content Include="template-config.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="docker\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

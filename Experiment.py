@@ -11,15 +11,18 @@ import pickle
 import argparse
 import shutil
 import time
+from abc import ABCMeta, abstractmethod
+
 
 class Experiment():
+    __metaclass__ = ABCMeta
 
-    RANGE_START = 10
-    RANGE_END = 20
+    RANGE_START = 2
+    RANGE_END = 25
     LAUNCH_WAIT = 18
-    DOCKER = spawn.find_executable("docker")
+    VIRT = NotImplemented
     APT = spawn.find_executable("apt-get")
-    CONTAINER = "ipop-dkr{0}"
+    CONTAINER = NotImplemented
 
     def __init__(self, exp_dir=None):
         parser = argparse.ArgumentParser(description="Configures and runs Ken's PhD Experiment")
@@ -50,41 +53,56 @@ class Experiment():
         self.config_dir = "{0}/config".format(self.exp_dir)
         self.cores_dir = "{0}/cores".format(self.exp_dir)
         self.logs_dir = "{0}/log".format(self.exp_dir)
-        self.config_file_base = "{0}/config-dkr".format(self.config_dir)
+        self.config_file_base = "{0}/config-".format(self.config_dir)
         self.seq_file = "{0}/startup.list".format(self.exp_dir)
 
     @classmethod
     def runshell(cls, cmd):
         """ Run a shell command. if fails, raise an exception. """
+        if cmd[0] is None:
+            raise ValueError("No executable specified to run")
         p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        #if p.returncode != 0:
-        #    err = "Subprocess: \"{0}\" failed, std err = {1}".format(str(cmd), str(p.stderr))
-        #    raise RuntimeError(err)
         return p
 
+    @property
+    @abstractmethod
     def gen_config(self, range_start, range_end):
-        with open(self.template_file) as fd:
-            template = json.load(fd)
-        node_id = template["CFx"].get("NodeId", "a0000##0eb6040628e5fb7e70b046f##")
-        node_name = template["OverlayVisualizer"].get("NodeName", "dkr##")
-        node_ip = template["BridgeController"]["Overlays"]["101000F"].get("IP4", "10.10.100.##")
+        pass
 
-        for val in range(range_start, range_end):
-            rng_str = str(val)
-            cfg_file = "{0}{1}.json".format(self.config_file_base, val)
-            node_id = "{0}{1}{2}{1}{3}".format(node_id[:5], rng_str, node_id[7:30], node_id[32:])
-            node_name = "{0}{1}".format(node_name[:3], rng_str)
-            node_ip = "{0}{1}".format(node_ip[:10], rng_str)
+    @property
+    @abstractmethod
+    def start_instance(self, instance):
+        pass
 
-            template["CFx"]["NodeId"] = node_id
-            template["OverlayVisualizer"]["NodeName"] = node_name
-            template["BridgeController"]["Overlays"]["101000F"]["IP4"] = node_ip
-            os.makedirs(self.config_dir, exist_ok=True)
-            with open(cfg_file, "w") as f:
-                json.dump(template, f, indent=2)
-                f.flush()
-        if self.args.verbose:
-            print("{0} config file(s) generated".format(range_end-range_start))
+    @property
+    @abstractmethod
+    def end(self):
+        pass
+
+    def clean_config(self):
+        if os.path.isdir(self.config_dir):
+            shutil.rmtree(self.config_dir)
+            if self.args.verbose:
+                print("Removed dir {}".format(self.config_dir))
+        if os.path.isfile(self.seq_file):
+            os.remove(self.seq_file)
+            if self.args.verbose:
+                print("Removed file {}".format(self.seq_file))
+
+    def make_clean(self):
+        self.clean_config()
+        if os.path.isdir(self.logs_dir):
+            shutil.rmtree(self.logs_dir)
+            if self.args.verbose:
+                print("Removed dir {}".format(self.logs_dir))
+        if os.path.isdir(self.cores_dir):
+            shutil.rmtree(self.cores_dir)
+            if self.args.verbose:
+                print("Removed dir {}".format(self.cores_dir))
+
+    def configure(self):
+        self.gen_config(Experiment.RANGE_START, Experiment.RANGE_END)
+        self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
 
     def gen_rand_seq(self, range_start, range_end):
         count = 0
@@ -117,36 +135,6 @@ class Experiment():
         else:
             self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
 
-
-    def start_instance(self, instance):
-        container = Experiment.CONTAINER.format(instance)
-        log_dir = "{0}/dkr{1}".format(self.logs_dir, instance)
-        os.makedirs(log_dir, exist_ok=True)
-
-        cfg_file = "{0}{1}.json".format(self.config_file_base, instance)
-        if not os.path.isfile(cfg_file):
-            self.gen_config(instance, instance+1)
-
-        core_dir = "{0}/{1}/".format(self.cores_dir, container)
-        os.makedirs(core_dir, exist_ok=True)
-
-        mount_cfg = "{0}:/etc/opt/ipop-vpn/config.json".format(cfg_file)
-        mount_log = "{0}/:/var/log/ipop-vpn/".format(log_dir)
-        mount_core = "{0}:/var/cores/".format(core_dir)
-        args = ["--rm", "--privileged"]
-        opts = "-d"
-        img = "kcratie/ringroute:0.1"
-        cmd = "/sbin/init"
-
-        cmd_list = [Experiment.DOCKER, "run", opts, "-v", mount_cfg, "-v", mount_log,
-                    "-v", mount_core, args[0], args[1], "--name", container, img, cmd]
-
-        resp = Experiment.runshell(cmd_list)
-        if self.args.verbose:
-            print(cmd_list)
-            print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
-                else resp.stderr.decode("utf-8"))
-
     def start_all(self, num, wait, mode="random"):
         cnt = 1
         sequence = self.seq_list
@@ -160,28 +148,7 @@ class Experiment():
             self.start_instance(inst)
             cnt += 1
         if self.args.verbose:
-            print("{0} docker container(s) instantiated".format(len(self.seq_list)))
-
-    def clean_config(self):
-        if os.path.isdir(self.config_dir):
-            shutil.rmtree(self.config_dir)
-            if self.args.verbose:
-                print("Removed dir {}".format(self.config_dir))
-        if os.path.isfile(self.seq_file):
-            os.remove(self.seq_file)
-            if self.args.verbose:
-                print("Removed file {}".format(self.seq_file))
-
-    def make_clean(self):
-        self.clean_config()
-        if os.path.isdir(self.logs_dir):
-            shutil.rmtree(self.logs_dir)
-            if self.args.verbose:
-                print("Removed dir {}".format(self.logs_dir))
-        if os.path.isdir(self.cores_dir):
-            shutil.rmtree(self.cores_dir)
-            if self.args.verbose:
-                print("Removed dir {}".format(self.cores_dir))
+            print("{0} container(s) instantiated".format(len(self.seq_list)))
 
     def run(self):
         if not os.path.isdir(self.config_dir):
@@ -195,18 +162,7 @@ class Experiment():
         if os.path.isdir(self.logs_dir):
             shutil.rmtree(self.logs_dir)
 
-        self.start_all(3, Experiment.LAUNCH_WAIT, "random")
-
-    def stop_all_containers(self):
-        cmd_list = [Experiment.DOCKER, "stop"]
-        for inst in range(Experiment.RANGE_START, Experiment.RANGE_END):
-            container = Experiment.CONTAINER.format(inst)
-            cmd_list.append(container)
-        resp = Experiment.runshell(cmd_list)
-        if self.args.verbose:
-            print(cmd_list)
-            print(resp.stdout.decode("utf-8") if resp.returncode == 0 else \
-                resp.stderr.decode("utf-8"))
+        self.start_all(6, Experiment.LAUNCH_WAIT, "random")
 
     def display_current_config(self):
         print("----Experiment Configuration----")
@@ -223,15 +179,151 @@ class Experiment():
                 print(resp.stdout.decode("utf-8") if resp.returncode == 0 else \
                     resp.stderr.decode("utf-8"))
 
-    def docker_pull_image(self):
-        cmd_list = [Experiment.DOCKER, "pull", "kcratie/ringroute:0.1"]
+class LxdExperiment(Experiment):
+    VIRT = spawn.find_executable("lxd")
+    CONTAINER = "ipop-lxd{0}"
+
+    def __init__(self, exp_dir=None):
+        super().__init__(exp_dir=exp_dir)
+
+    def gen_config(self, range_start, range_end):
+        with open(self.template_file) as fd:
+            template = json.load(fd)
+        node_id = template["CFx"].get("NodeId", "a0000##0eb6040628e5fb7e70b046f##")
+        node_name = template["OverlayVisualizer"].get("NodeName", "dkr##")
+        node_ip = template["BridgeController"]["Overlays"]["101000F"].get("IP4", "10.10.100.##")
+
+        for val in range(range_start, range_end):
+            rng_str = str(val)
+            cfg_file = "{0}{1}.json".format(self.config_file_base, val)
+            node_id = "{0}{1}{2}{1}{3}".format(node_id[:5], rng_str, node_id[7:30], node_id[32:])
+            node_name = "{0}{1}".format(node_name[:3], rng_str)
+            node_ip = "{0}{1}".format(node_ip[:10], rng_str)
+
+            template["CFx"]["NodeId"] = node_id
+            template["OverlayVisualizer"]["NodeName"] = node_name
+            template["BridgeController"]["Overlays"]["101000F"]["IP4"] = node_ip
+            os.makedirs(self.config_dir, exist_ok=True)
+            with open(cfg_file, "w") as f:
+                json.dump(template, f, indent=2)
+                f.flush()
+        if self.args.verbose:
+            print("{0} config file(s) generated".format(range_end-range_start))
+
+    def start_instance(self, instance):
+        container = LxdExperiment.CONTAINER.format(instance)
+        cfg_file = "{0}{1}.json".format(self.config_file_base, instance)
+        if not os.path.isfile(cfg_file):
+            self.gen_config(instance, instance+1)
+
+        dst = "{0}/etc/opt/ipop-vpn/config.json".format(container)
+        cmd_list = [LxdExperiment.VIRT, "file", "push", cfg_file, dst]
+
+        #resp = Experiment.runshell(cmd_list)
+        if self.args.verbose:
+            print(cmd_list)
+         #   print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
+         #       else resp.stderr.decode("utf-8"))
+
+        cmd_list = [LxdExperiment.VIRT, "start", container]
+
+        #resp = Experiment.runshell(cmd_list)
+        if self.args.verbose:
+            print(cmd_list)
+        #    print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
+        #        else resp.stderr.decode("utf-8"))
+
+    def end(self):
+        pass
+
+class DockerExperiment(Experiment):
+    VIRT = spawn.find_executable("docker")
+    CONTAINER = "ipop-dkr{0}"
+
+    def __init__(self, exp_dir=None):
+        super().__init__(exp_dir=exp_dir)
+
+    def configure(self):
+        super().configure()
+        # self.pull_image()
+
+    def gen_config(self, range_start, range_end):
+        with open(self.template_file) as fd:
+            template = json.load(fd)
+        node_id = template["CFx"].get("NodeId", "a000###feb6040628e5fb7e70b04f###")
+        node_name = template["OverlayVisualizer"].get("NodeName", "dkr###")
+        node_ip = template["BridgeController"]["Overlays"]["101000F"].get("IP4", "10.10.100.###")
+
+        for val in range(range_start, range_end):
+            rng_str = "{0:03}".format(val)
+            cfg_file = "{0}{1}.json".format(self.config_file_base, rng_str)
+            node_id = "{0}{1}{2}{1}{3}".format(node_id[:4], rng_str, node_id[7:29], node_id[32:])
+            node_name = "{0}{1}".format(node_name[:3], rng_str)
+            node_ip = "{0}{1}".format(node_ip[:10], val)
+
+            template["CFx"]["NodeId"] = node_id
+            template["OverlayVisualizer"]["NodeName"] = node_name
+            template["BridgeController"]["Overlays"]["101000F"]["IP4"] = node_ip
+            os.makedirs(self.config_dir, exist_ok=True)
+            with open(cfg_file, "w") as f:
+                json.dump(template, f, indent=2)
+                f.flush()
+        if self.args.verbose:
+            print("{0} config file(s) generated".format(range_end-range_start))
+
+    def start_instance(self, instance):
+        instance = "{0:03}".format(instance)
+        container = DockerExperiment.CONTAINER.format(instance)
+        log_dir = "{0}/dkr{1}".format(self.logs_dir, instance)
+        os.makedirs(log_dir, exist_ok=True)
+
+        cfg_file = "{0}{1}.json".format(self.config_file_base, instance)
+        if not os.path.isfile(cfg_file):
+            self.gen_config(instance, instance+1)
+
+        mount_cfg = "{0}:/etc/opt/ipop-vpn/config.json".format(cfg_file)
+        mount_log = "{0}/:/var/log/ipop-vpn/".format(log_dir)
+        args = ["--rm", "--privileged"]
+        opts = "-d"
+        img = "kcratie/ringroute:0.1"
+        cmd = "/sbin/init"
+
+        cmd_list = [DockerExperiment.VIRT, "run", opts, "-v", mount_cfg, "-v", mount_log,
+                    args[0], args[1], "--name", container, img, cmd]
+
+        resp = Experiment.runshell(cmd_list)
+        if self.args.verbose:
+            print(cmd_list)
+            print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
+                else resp.stderr.decode("utf-8"))
+
+    def pull_image(self):
+        cmd_list = [DockerExperiment.VIRT, "pull", "kcratie/ringroute:0.1"]
         resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(resp)
 
+    def stop_all_containers(self):
+        cmd_list = [DockerExperiment.VIRT, "stop"]
+        for inst in range(Experiment.RANGE_START, Experiment.RANGE_END):
+            container = Experiment.CONTAINER.format(inst)
+            cmd_list.append(container)
+        resp = Experiment.runshell(cmd_list)
+        if self.args.verbose:
+            print(cmd_list)
+            print(resp.stdout.decode("utf-8") if resp.returncode == 0 else \
+                resp.stderr.decode("utf-8"))
+
+    def end(self):
+        self.stop_all_containers()
 
 def main():
-    exp = Experiment()
+    EXP_TYPE = "dkr".casefold()
+    if EXP_TYPE == "dkr".casefold():
+        exp = DockerExperiment()
+    elif EXP_TYPE == "lxd".casefold():
+        exp = LxdExperiment()
+
     if exp.args.run and exp.args.end:
         print("Error! Both run and end were specified.")
         return
@@ -256,16 +348,14 @@ def main():
 
     if exp.args.configure:
         exp.clean_config()
-        exp.gen_config(Experiment.RANGE_START, Experiment.RANGE_END)
-        exp.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
-
+        exp.configure()
 
     if exp.args.run:
         exp.run()
         return
 
     if exp.args.end:
-        exp.stop_all_containers()
+        exp.end()
         return
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@
   "CFx": {
     "Model": "Default",
     "Overlays": [ "101000F" ],
-    "NodeId": "a0000##feb6040628e5fb7e70b046f##"
+    "NodeId": "a000###feb6040628e5fb7e70b04f###"
   },
   "Logger": {
     "LogLevel": "DEBUG",
@@ -51,7 +51,7 @@
   "OverlayVisualizer": {
     "TimerInterval": 30,
     "WebServiceAddress": "128.227.150.28:5000",
-    "NodeName": "dkr##"
+    "NodeName": "dkr###"
   },
   "BridgeController": {
     "Dependencies": [ "Logger", "SDNInterface", "LinkManager" ],
@@ -59,7 +59,7 @@
       "101000F": {
         "Type": "OVS",
         "BridgeName": "ipopbr",
-        "IP4": "10.10.100.##",
+        "IP4": "10.10.100.###",
         "PrefixLen": 24,
         "MTU": 1410,
         "STP": false,

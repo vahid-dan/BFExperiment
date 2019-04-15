@@ -1,5 +1,6 @@
 #!/bin/bash
 
+systemctl mask getty@tty1.service
 mkdir -p /opt/ipop-vpn/.pip_cache
 cd /opt/ipop-vpn
 pip3 --cache-dir /opt/ipop-vpn/.pip_cache install virtualenv
