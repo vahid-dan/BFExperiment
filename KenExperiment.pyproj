@@ -13,7 +13,7 @@
     <Name>KenExperiment</Name>
     <RootNamespace>config-gen</RootNamespace>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>-v -clean -configure -run</CommandLineArguments>
+    <CommandLineArguments>-v --clean --configure --run --range 60,110</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -25,6 +25,7 @@
     <EnableUnmanagedDebugging>false</EnableUnmanagedDebugging>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="cloud-lab-init.py" />
     <Compile Include="Experiment.py" />
   </ItemGroup>
   <ItemGroup>
@@ -33,6 +34,7 @@
     <Content Include="docker\prereq.Dockerfile" />
     <Content Include="docker\setup-prereqs.sh" />
     <Content Include="setup-docker.sh" />
+    <Content Include="setup-services.sh" />
     <Content Include="setup-python.sh" />
     <Content Include="setup-system.sh" />
     <Content Include="template-config.json" />

@@ -17,34 +17,48 @@ from abc import ABCMeta, abstractmethod
 class Experiment():
     __metaclass__ = ABCMeta
 
-    RANGE_START = 2
-    RANGE_END = 25
-    LAUNCH_WAIT = 18
+    RANGE_START = 1
+    RANGE_END = 49
+    LAUNCH_WAIT = 20
+    BATCH_SZ = 10
     VIRT = NotImplemented
     APT = spawn.find_executable("apt-get")
     CONTAINER = NotImplemented
 
     def __init__(self, exp_dir=None):
         parser = argparse.ArgumentParser(description="Configures and runs Ken's PhD Experiment")
-        parser.add_argument("-clean", action="store_true", default=False, dest="clean",
+        parser.add_argument("--clean", action="store_true", default=False, dest="clean",
                             help="Removes all generated files and directories")
-        parser.add_argument("-configure", action="store_true", default=False, dest="configure",
+        parser.add_argument("--configure", action="store_true", default=False, dest="configure",
                             help="Generates the config files and directories")
         parser.add_argument("-v", action="store_true", default=False, dest="verbose",
-                            help="Print on screen activity report")
-        parser.add_argument("-run", action="store_true", default=False, dest="run",
+                            help="Print experiment activity info")
+        parser.add_argument("--range", action="store", dest="range",
+                            help="Specifies the experiment start and end range in format #,#")
+        parser.add_argument("--run", action="store_true", default=False, dest="run",
                             help="Runs the currently configured experiment")
-        parser.add_argument("-end", action="store_true", default=False, dest="end",
+        parser.add_argument("--end", action="store_true", default=False, dest="end",
                             help="End the currently running experiment")
         parser.add_argument("-info", action="store_true", default=False, dest="info",
                             help="Displays the current experiment configuration")
-        parser.add_argument("-setup", action="store_true", default=False, dest="setup",
-                            help="Displays the current experiment configuration")
-        parser.add_argument("-pullimage", action="store_true", default=False, dest="pull_image",
+        parser.add_argument("--setup", action="store_true", default=False, dest="setup",
+                            help="Installs software requirements. Requires run as root.")
+        parser.add_argument("--pull", action="store_true", default=False, dest="pull",
                             help="Pulls the kcratie/ringroute:0.1 image from docker hub")
+        parser.add_argument("--lxd", action="store_true", default=False, dest="lxd",
+                            help="Uses LXC containers")
+        parser.add_argument("--dkr", action="store_true", default=False, dest="dkr",
+                            help="Use docker containers")
 
         self.args = parser.parse_args()
-        self.total_inst = Experiment.RANGE_END - Experiment.RANGE_START
+        self.range_end = Experiment.RANGE_END
+        self.range_start = Experiment.RANGE_START
+        if self.args.range:
+            rng = self.args.range.rsplit(",", 2)
+            range_end = int(rng[1])
+            range_start = int(rng[0])
+
+        self.total_inst = range_end - range_start
         self.seq_list = [None] * self.total_inst
         self.exp_dir = exp_dir
         if not self.exp_dir:
@@ -136,17 +150,17 @@ class Experiment():
             self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
 
     def start_all(self, num, wait, mode="random"):
-        cnt = 1
+        cnt = 0
         sequence = self.seq_list
         if mode == "seqential":
             sequence = range(Experiment.RANGE_START, Experiment.RANGE_END)
         elif mode == "reversed":
             sequence = range(Experiment.RANGE_END, Experiment.RANGE_START, -1)
         for inst in sequence:
-            if cnt % num == 0:
-                time.sleep(wait)
             self.start_instance(inst)
             cnt += 1
+            if cnt % num == 0 and cnt < len(sequence):
+                time.sleep(wait)
         if self.args.verbose:
             print("{0} container(s) instantiated".format(len(self.seq_list)))
 
@@ -162,22 +176,24 @@ class Experiment():
         if os.path.isdir(self.logs_dir):
             shutil.rmtree(self.logs_dir)
 
-        self.start_all(6, Experiment.LAUNCH_WAIT, "random")
+        self.start_all(Experiment.BATCH_SZ, Experiment.LAUNCH_WAIT, "random")
 
     def display_current_config(self):
         print("----Experiment Configuration----")
-        print("{0} instances range {1}-{2}".format(self.total_inst, Experiment.RANGE_START, Experiment.RANGE_END))
+        print("{0} instances range {1}-{2}".format(self.total_inst, Experiment.RANGE_START,
+                                                   Experiment.RANGE_END))
         print("Config files are {0}".format(self.config_dir))
         print("".format())
 
     def setup_system(self):
-        setup_cmds = [["./setup-python.sh"], ["./setup-docker.sh"]]
+        setup_cmds = [["./setup-system.sh"]]
         for cmd_list in setup_cmds:
             resp = Experiment.runshell(cmd_list)
             if self.args.verbose:
                 print(cmd_list)
-                print(resp.stdout.decode("utf-8") if resp.returncode == 0 else \
-                    resp.stderr.decode("utf-8"))
+                print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
+                      resp.stderr.decode("utf-8"))
+
 
 class LxdExperiment(Experiment):
     VIRT = spawn.find_executable("lxd")
@@ -219,7 +235,7 @@ class LxdExperiment(Experiment):
         dst = "{0}/etc/opt/ipop-vpn/config.json".format(container)
         cmd_list = [LxdExperiment.VIRT, "file", "push", cfg_file, dst]
 
-        #resp = Experiment.runshell(cmd_list)
+        # resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(cmd_list)
          #   print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
@@ -236,6 +252,7 @@ class LxdExperiment(Experiment):
     def end(self):
         pass
 
+
 class DockerExperiment(Experiment):
     VIRT = spawn.find_executable("docker")
     CONTAINER = "ipop-dkr{0}"
@@ -243,9 +260,9 @@ class DockerExperiment(Experiment):
     def __init__(self, exp_dir=None):
         super().__init__(exp_dir=exp_dir)
 
-    def configure(self):
-        super().configure()
-        # self.pull_image()
+    #def configure(self):
+    #    super().configure()
+    #    self.pull_image()
 
     def gen_config(self, range_start, range_end):
         with open(self.template_file) as fd:
@@ -294,8 +311,8 @@ class DockerExperiment(Experiment):
         resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(cmd_list)
-            print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
-                else resp.stderr.decode("utf-8"))
+            print(resp.stdout.decode("utf-8") if resp.returncode == 0
+                  else resp.stderr.decode("utf-8"))
 
     def pull_image(self):
         cmd_list = [DockerExperiment.VIRT, "pull", "kcratie/ringroute:0.1"]
@@ -306,22 +323,22 @@ class DockerExperiment(Experiment):
     def stop_all_containers(self):
         cmd_list = [DockerExperiment.VIRT, "stop"]
         for inst in range(Experiment.RANGE_START, Experiment.RANGE_END):
-            container = Experiment.CONTAINER.format(inst)
+            inst = "{0:03}".format(inst)
+            container = DockerExperiment.CONTAINER.format(inst)
             cmd_list.append(container)
         resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(cmd_list)
-            print(resp.stdout.decode("utf-8") if resp.returncode == 0 else \
-                resp.stderr.decode("utf-8"))
+            print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
+                  resp.stderr.decode("utf-8"))
 
     def end(self):
         self.stop_all_containers()
 
+
 def main():
-    EXP_TYPE = "dkr".casefold()
-    if EXP_TYPE == "dkr".casefold():
-        exp = DockerExperiment()
-    elif EXP_TYPE == "lxd".casefold():
+    exp = DockerExperiment()
+    if exp.args.lxd:
         exp = LxdExperiment()
 
     if exp.args.run and exp.args.end:
@@ -335,15 +352,15 @@ def main():
     if exp.args.setup:
         exp.setup_system()
 
-    if exp.args.pull_image:
-        exp.docker_pull_image()
+    if exp.args.pull:
+        exp.pull_image()
 
     if exp.args.clean:
         exp.make_clean()
 
-    if Experiment.RANGE_END - Experiment.RANGE_START <= 0:
+    if exp.range_end - exp.range_start <= 0:
         print("Invalid range, please fix RANGE_START={0} RANGE_END={1}".
-              format(Experiment.RANGE_START, Experiment.RANGE_END))
+              format(exp.range_start, exp.range_end))
         return
 
     if exp.args.configure:
@@ -357,6 +374,7 @@ def main():
     if exp.args.end:
         exp.end()
         return
+
 
 if __name__ == "__main__":
     main()
