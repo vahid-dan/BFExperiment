@@ -33,11 +33,10 @@
     <Content Include="docker\ipop.Dockerfile" />
     <Content Include="docker\prereq.Dockerfile" />
     <Content Include="docker\setup-prereqs.sh" />
-    <Content Include="setup-docker.sh" />
     <Content Include="setup-services.sh" />
-    <Content Include="setup-python.sh" />
     <Content Include="setup-system.sh" />
     <Content Include="template-config.json" />
+    <Content Include="update-limit.sh" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="docker\" />
