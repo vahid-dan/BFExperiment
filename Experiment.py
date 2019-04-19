@@ -17,8 +17,8 @@ from abc import ABCMeta, abstractmethod
 class Experiment():
     __metaclass__ = ABCMeta
 
-    RANGE_START = 1
-    RANGE_END = 49
+    RANGE_START = 10
+    RANGE_END = 22
     LAUNCH_WAIT = 20
     BATCH_SZ = 10
     VIRT = NotImplemented
@@ -55,10 +55,10 @@ class Experiment():
         self.range_start = Experiment.RANGE_START
         if self.args.range:
             rng = self.args.range.rsplit(",", 2)
-            range_end = int(rng[1])
-            range_start = int(rng[0])
+            self.range_end = int(rng[1])
+            self.range_start = int(rng[0])
 
-        self.total_inst = range_end - range_start
+        self.total_inst = self.range_end - self.range_start
         self.seq_list = [None] * self.total_inst
         self.exp_dir = exp_dir
         if not self.exp_dir:
@@ -115,8 +115,8 @@ class Experiment():
                 print("Removed dir {}".format(self.cores_dir))
 
     def configure(self):
-        self.gen_config(Experiment.RANGE_START, Experiment.RANGE_END)
-        self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
+        self.gen_config(self.range_start, self.range_end)
+        self.gen_rand_seq(self.range_start, self.range_end)
 
     def gen_rand_seq(self, range_start, range_end):
         count = 0
@@ -147,15 +147,15 @@ class Experiment():
                 print("Sequence list loaded from existing file -  {0} entries\n{1}".
                       format(len(self.seq_list), self.seq_list))
         else:
-            self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
+            self.gen_rand_seq(self.range_start, self.range_end)
 
     def start_all(self, num, wait, mode="random"):
         cnt = 0
         sequence = self.seq_list
         if mode == "seqential":
-            sequence = range(Experiment.RANGE_START, Experiment.RANGE_END)
+            sequence = range(self.range_start, self.range_end)
         elif mode == "reversed":
-            sequence = range(Experiment.RANGE_END, Experiment.RANGE_START, -1)
+            sequence = range(self.range_end, self.range_start, -1)
         for inst in sequence:
             self.start_instance(inst)
             cnt += 1
@@ -166,12 +166,12 @@ class Experiment():
 
     def run(self):
         if not os.path.isdir(self.config_dir):
-            self.gen_config(Experiment.RANGE_START, Experiment.RANGE_END)
+            self.gen_config(self.range_start, self.range_end)
 
         if os.path.isfile(self.seq_file):
             self.load_seq_list()
         else:
-            self.gen_rand_seq(Experiment.RANGE_START, Experiment.RANGE_END)
+            self.gen_rand_seq(self.range_start, self.range_end)
 
         if os.path.isdir(self.logs_dir):
             shutil.rmtree(self.logs_dir)
@@ -180,8 +180,8 @@ class Experiment():
 
     def display_current_config(self):
         print("----Experiment Configuration----")
-        print("{0} instances range {1}-{2}".format(self.total_inst, Experiment.RANGE_START,
-                                                   Experiment.RANGE_END))
+        print("{0} instances range {1}-{2}".format(self.total_inst, self.range_start,
+                                                   self.range_end))
         print("Config files are {0}".format(self.config_dir))
         print("".format())
 
@@ -322,7 +322,7 @@ class DockerExperiment(Experiment):
 
     def stop_all_containers(self):
         cmd_list = [DockerExperiment.VIRT, "stop"]
-        for inst in range(Experiment.RANGE_START, Experiment.RANGE_END):
+        for inst in range(self.range_start, self.range_end):
             inst = "{0:03}".format(inst)
             container = DockerExperiment.CONTAINER.format(inst)
             cmd_list.append(container)
@@ -364,7 +364,6 @@ def main():
         return
 
     if exp.args.configure:
-        exp.clean_config()
         exp.configure()
 
     if exp.args.run:

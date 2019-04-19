@@ -1,3 +1,19 @@
+"""
+Single bare-metal amd64 Ubuntu 18.04 node running RingRoute in Docker
+containers.
+
+Instructions:
+As root (sudo su), run the update-limits.sh script and reboot before starting
+containers. Update the template-config with your current Signal and Visualizer
+server addresses.
+To run an experiment from the workspace/experiment directory perform the
+following steps:
+source exp-venv/bin/activate
+python ./Experiment.py --clean --configure --pull --run --range 10,35
+You can set the range to values between 1 and 255 but each system can
+handle only about 25 containers. """
+
+
 # Import the Portal object.
 import geni.portal as portal
 # Import the ProtoGENI library.
@@ -16,7 +32,7 @@ node = request.RawPC('node')
 node.disk_image = 'urn:publicid:IDN+utah.cloudlab.us+image+xos-PG0:Ubuntu18.04-amd64-20190107'
 
 # Install and execute scripts on the node
-node.addService(pg.Install(url="https://github.com/kcratie/KenExperiment/releases/download/untagged-8d74e9d9ede5cf9f9393/rr-exp.tar.gz", path="/local"))
+node.addService(pg.Install(url="https://www.dropbox.com/s/ovzx5bcnu6hkakx/rr-exp.tar.gz", path="/local"))
 node.addService(pg.Execute(shell="bash", command="/local/rr-exp/setup-system.sh"))
 
 # Set the Site

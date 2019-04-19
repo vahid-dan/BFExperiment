@@ -8,3 +8,4 @@ apt-get install -y ./openfire_4.3.2_all.deb
 git clone https://github.com/ipop-project/Network-Visualizer.git
 cd Network-Visualizer/setup
 ./setup.sh
+chown -R kcratie /users/kcratie/

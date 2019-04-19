@@ -36,7 +36,7 @@
     <Content Include="setup-services.sh" />
     <Content Include="setup-system.sh" />
     <Content Include="template-config.json" />
-    <Content Include="update-limit.sh" />
+    <Content Include="update-limits.sh" />
   </ItemGroup>
   <ItemGroup>
     <Folder Include="docker\" />

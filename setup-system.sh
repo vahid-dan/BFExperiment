@@ -16,7 +16,7 @@ sudo apt install -y docker-ce
 sudo groupadd -f docker
 sudo usermod -a -G sudo,docker kcratie
 
-mkdir -p /user/kcratie/workspaceexperiment && cd /user/kcratie/workspace/experiment
+mkdir -p /users/kcratie/workspace/experiment && cd /users/kcratie/workspace/experiment
 pip3 install virtualenv
 virtualenv exp-venv
 source exp-venv/bin/activate

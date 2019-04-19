@@ -17,15 +17,16 @@
     "Enabled": true,
     "Overlays": {
       "101000F": {
-        "HostAddress": "128.227.150.28",
+        "HostAddress": "###",
         "Port": "5222",
-        "Username": "ken01@rise-iot-gateway",
+        "Username": "ken01@###",
         "Password": "psswd01",
         "AuthenticationMethod": "PASSWORD"
       }
     }
   },
   "Topology": {
+    "PeerDiscoveryCoalesce": 9,
     "Overlays": {
       "101000F": {
         "Name": "ApplicationOverlay",
@@ -50,8 +51,8 @@
   },
   "OverlayVisualizer": {
     "TimerInterval": 30,
-    "WebServiceAddress": "128.227.150.28:5000",
-    "NodeName": "dkr###"
+    "WebServiceAddress": "###:5000",
+    "NodeName": "nd-###"
   },
   "BridgeController": {
     "Dependencies": [ "Logger", "SDNInterface", "LinkManager" ],

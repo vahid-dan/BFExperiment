@@ -9,7 +9,8 @@ RUN apt-get update -y && apt-get install -y psmisc \
     python3-pip \
     iproute2 \
     openvswitch-switch \
-    bridge-utils
+    bridge-utils \
+    iperf3
 
 COPY ./setup-prereqs.sh .
 RUN chmod +x ./setup-prereqs.sh
