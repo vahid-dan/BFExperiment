@@ -5,7 +5,7 @@
     "NodeId": "a000###feb6040628e5fb7e70b04f###"
   },
   "Logger": {
-    "LogLevel": "DEBUG",
+    "LogLevel": "INFO",
     "Device": "File",
     "Directory": "/var/log/ipop-vpn/",
     "CtrlLogFileName": "ctrl.log",
@@ -17,9 +17,9 @@
     "Enabled": true,
     "Overlays": {
       "101000F": {
-        "HostAddress": "###",
+        "HostAddress": "34.209.33.166",
         "Port": "5222",
-        "Username": "ken01@###",
+        "Username": "ken01@openfire.local",
         "Password": "psswd01",
         "AuthenticationMethod": "PASSWORD"
       }
@@ -32,15 +32,14 @@
         "Name": "ApplicationOverlay",
         "Description": "Scalable Structured Ring Overlay",
         "MaxSuccessors": 1,
-        "MaxLongDistEdges": 1,
         "MaxOnDemandEdges": 1,
-        "MaxConcurrentEdgeSetup": 3,
+        "MaxConcurrentEdgeSetup": 5,
         "Role": "Switch"
       }
     }
   },
   "LinkManager": {
-    "Dependencies": [ "Logger", "TincanInterface", "Signal", "OverlayVisualizer" ],
+    "Dependencies": [ "Logger", "TincanInterface", "Signal" ],
     "Stun": [ "stun.l.google.com:19302", "stun1.l.google.com:19302" ],
     "Overlays": {
       "101000F": {
@@ -50,12 +49,15 @@
     }
   },
   "OverlayVisualizer": {
-    "TimerInterval": 30,
-    "WebServiceAddress": "###:5000",
+    "Enabled": true,
+    "TimerInterval": 25,
+    "WebServiceAddress": "34.209.33.166:5000",
     "NodeName": "nd-###"
   },
   "BridgeController": {
-    "Dependencies": [ "Logger", "SDNInterface", "LinkManager" ],
+    "Dependencies": [ "Logger", "LinkManager" ],
+    "SdnListenAddress": "",
+    "SdnListenPort": 5802,    
     "Overlays": {
       "101000F": {
         "Type": "OVS",
@@ -70,15 +72,6 @@
           "HostName": "127.0.0.1",
           "Port": "6633"
         }
-      }
-    }
-  },
-  "SDNInterface": {
-    "Dependencies": [ "Logger", "Topology" ],
-    "Overlays": {
-      "101000F": {
-        "SdnListenAddress": "",
-        "SdnListenPort": 5802
       }
     }
   }

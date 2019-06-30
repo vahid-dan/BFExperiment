@@ -19,7 +19,7 @@ class Experiment():
 
     RANGE_START = 10
     RANGE_END = 22
-    LAUNCH_WAIT = 20
+    LAUNCH_WAIT = 5
     BATCH_SZ = 10
     VIRT = NotImplemented
     APT = spawn.find_executable("apt-get")
@@ -39,7 +39,7 @@ class Experiment():
                             help="Runs the currently configured experiment")
         parser.add_argument("--end", action="store_true", default=False, dest="end",
                             help="End the currently running experiment")
-        parser.add_argument("-info", action="store_true", default=False, dest="info",
+        parser.add_argument("--info", action="store_true", default=False, dest="info",
                             help="Displays the current experiment configuration")
         parser.add_argument("--setup", action="store_true", default=False, dest="setup",
                             help="Installs software requirements. Requires run as root.")
@@ -49,6 +49,10 @@ class Experiment():
                             help="Uses LXC containers")
         parser.add_argument("--dkr", action="store_true", default=False, dest="dkr",
                             help="Use docker containers")
+        parser.add_argument("--ping", action="store", dest="ping",
+                            help="Ping the specified address from each container")
+        parser.add_argument("--arp", action="store", dest="arp",
+                            help="arPing the specified address from each container")
 
         self.args = parser.parse_args()
         self.range_end = Experiment.RANGE_END
@@ -58,8 +62,6 @@ class Experiment():
             self.range_end = int(rng[1])
             self.range_start = int(rng[0])
 
-        self.total_inst = self.range_end - self.range_start
-        self.seq_list = [None] * self.total_inst
         self.exp_dir = exp_dir
         if not self.exp_dir:
             self.exp_dir = os.path.abspath(".")
@@ -69,6 +71,15 @@ class Experiment():
         self.logs_dir = "{0}/log".format(self.exp_dir)
         self.config_file_base = "{0}/config-".format(self.config_dir)
         self.seq_file = "{0}/startup.list".format(self.exp_dir)
+        self.range_file = "{0}/range_file".format(self.exp_dir)
+
+        if not self.args.range and os.path.isfile("range_file"):
+            with open(self.range_file) as fr:
+                rng = fr.read().strip().rsplit(",", 2)
+                self.range_end = int(rng[1])
+                self.range_start = int(rng[0])
+        self.total_inst = self.range_end - self.range_start
+        self.seq_list = [None] * self.total_inst
 
     @classmethod
     def runshell(cls, cmd):
@@ -115,15 +126,17 @@ class Experiment():
                 print("Removed dir {}".format(self.cores_dir))
 
     def configure(self):
+        with open(self.range_file, "w") as fd:
+            fd.write(self.args.range)
         self.gen_config(self.range_start, self.range_end)
-        self.gen_rand_seq(self.range_start, self.range_end)
+        self.gen_rand_seq()
 
-    def gen_rand_seq(self, range_start, range_end):
+    def gen_rand_seq(self):
         count = 0
         total_attempts = 0
         while count < self.total_inst:
             total_attempts += 1
-            inst = math.floor(random.uniform(range_start, range_end))
+            inst = math.floor(random.uniform(self.range_start, self.range_end))
             if inst not in self.seq_list:
                 self.seq_list[count] = inst
                 count += 1
@@ -147,22 +160,18 @@ class Experiment():
                 print("Sequence list loaded from existing file -  {0} entries\n{1}".
                       format(len(self.seq_list), self.seq_list))
         else:
-            self.gen_rand_seq(self.range_start, self.range_end)
+            self.gen_rand_seq()
 
-    def start_all(self, num, wait, mode="random"):
+    def start_range(self, num, wait, mode="random"):
         cnt = 0
         sequence = self.seq_list
-        if mode == "seqential":
-            sequence = range(self.range_start, self.range_end)
-        elif mode == "reversed":
-            sequence = range(self.range_end, self.range_start, -1)
-        for inst in sequence:
+        for inst in sequence[self.range_start-1:self.range_end-1]:
             self.start_instance(inst)
             cnt += 1
             if cnt % num == 0 and cnt < len(sequence):
                 time.sleep(wait)
         if self.args.verbose:
-            print("{0} container(s) instantiated".format(len(self.seq_list)))
+            print("{0} container(s) instantiated".format(cnt))
 
     def run(self):
         if not os.path.isdir(self.config_dir):
@@ -171,18 +180,20 @@ class Experiment():
         if os.path.isfile(self.seq_file):
             self.load_seq_list()
         else:
-            self.gen_rand_seq(self.range_start, self.range_end)
+            self.gen_rand_seq()
 
-        if os.path.isdir(self.logs_dir):
-            shutil.rmtree(self.logs_dir)
+        #if os.path.isdir(self.logs_dir):
+        #    shutil.rmtree(self.logs_dir)
 
-        self.start_all(Experiment.BATCH_SZ, Experiment.LAUNCH_WAIT, "random")
+        self.start_range(Experiment.BATCH_SZ, Experiment.LAUNCH_WAIT, "random")
 
     def display_current_config(self):
         print("----Experiment Configuration----")
         print("{0} instances range {1}-{2}".format(self.total_inst, self.range_start,
                                                    self.range_end))
-        print("Config files are {0}".format(self.config_dir))
+        print("Config dir {0}".format(self.config_dir))
+        print("Config base filename {0}".format(self.config_file_base))
+        print("Log dir {0}".format(self.logs_dir))
         print("".format())
 
     def setup_system(self):
@@ -193,7 +204,6 @@ class Experiment():
                 print(cmd_list)
                 print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
                       resp.stderr.decode("utf-8"))
-
 
 class LxdExperiment(Experiment):
     VIRT = spawn.find_executable("lxd")
@@ -320,9 +330,12 @@ class DockerExperiment(Experiment):
         if self.args.verbose:
             print(resp)
 
-    def stop_all_containers(self):
+    def stop_range(self, mode="random"):
+        cnt = 0
         cmd_list = [DockerExperiment.VIRT, "stop"]
-        for inst in range(self.range_start, self.range_end):
+        sequence = self.seq_list
+        for inst in sequence[self.range_start-1:self.range_end-1]:
+            cnt += 1
             inst = "{0:03}".format(inst)
             container = DockerExperiment.CONTAINER.format(inst)
             cmd_list.append(container)
@@ -331,10 +344,38 @@ class DockerExperiment(Experiment):
             print(cmd_list)
             print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
                   resp.stderr.decode("utf-8"))
+        print("{0} Docker container(s) terminated".format(cnt))
 
     def end(self):
-        self.stop_all_containers()
+        self.load_seq_list()
+        self.stop_range()
 
+    def run_ping(self, target_address):
+        for inst in range(self.range_start, self.range_end):
+            cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
+            inst = "{0:03}".format(inst)
+            container = DockerExperiment.CONTAINER.format(inst)
+            cmd_list.append(container)
+            cmd_list += ["ping", "-c1"]
+            cmd_list.append(target_address)
+            resp = Experiment.runshell(cmd_list)
+            if self.args.verbose:
+                print(cmd_list)
+            print(resp.stdout.decode("utf-8"))
+
+    def run_arp(self, target_address):
+        for inst in range(self.range_start, self.range_end):
+            cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
+            inst = "{0:03}".format(inst)
+            container = DockerExperiment.CONTAINER.format(inst)
+            cmd_list.append(container)
+            cmd_list += ["arping", "-C1"]
+            cmd_list.append(target_address)
+            resp = Experiment.runshell(cmd_list)
+            if self.args.verbose:
+                print(cmd_list)
+            print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
+                    resp.stderr.decode("utf-8"))
 
 def main():
     exp = DockerExperiment()
@@ -374,6 +415,13 @@ def main():
         exp.end()
         return
 
+    if exp.args.ping:
+        exp.run_ping(exp.args.ping)
+        return
+
+    if exp.args.arp:
+        exp.run_arp(exp.args.arp)
+        return
 
 if __name__ == "__main__":
     main()

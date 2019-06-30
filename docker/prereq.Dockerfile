@@ -10,7 +10,9 @@ RUN apt-get update -y && apt-get install -y psmisc \
     iproute2 \
     openvswitch-switch \
     bridge-utils \
-    iperf3
+    iperf \
+    arping \
+    tcpdump
 
 COPY ./setup-prereqs.sh .
 RUN chmod +x ./setup-prereqs.sh
