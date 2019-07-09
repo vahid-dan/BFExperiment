@@ -19,7 +19,7 @@ class Experiment():
 
     RANGE_START = 10
     RANGE_END = 22
-    LAUNCH_WAIT = 5
+    LAUNCH_WAIT = 2
     BATCH_SZ = 10
     VIRT = NotImplemented
     APT = spawn.find_executable("apt-get")
@@ -162,7 +162,7 @@ class Experiment():
         else:
             self.gen_rand_seq()
 
-    def start_range(self, num, wait, mode="random"):
+    def start_range(self, num, wait):
         cnt = 0
         sequence = self.seq_list
         for inst in sequence[self.range_start-1:self.range_end-1]:
@@ -170,8 +170,7 @@ class Experiment():
             cnt += 1
             if cnt % num == 0 and cnt < len(sequence):
                 time.sleep(wait)
-        if self.args.verbose:
-            print("{0} container(s) instantiated".format(cnt))
+        print("{0} container(s) instantiated".format(cnt))
 
     def run(self):
         if not os.path.isdir(self.config_dir):
@@ -185,7 +184,7 @@ class Experiment():
         #if os.path.isdir(self.logs_dir):
         #    shutil.rmtree(self.logs_dir)
 
-        self.start_range(Experiment.BATCH_SZ, Experiment.LAUNCH_WAIT, "random")
+        self.start_range(Experiment.BATCH_SZ, Experiment.LAUNCH_WAIT)
 
     def display_current_config(self):
         print("----Experiment Configuration----")
@@ -199,11 +198,11 @@ class Experiment():
     def setup_system(self):
         setup_cmds = [["./setup-system.sh"]]
         for cmd_list in setup_cmds:
-            resp = Experiment.runshell(cmd_list)
             if self.args.verbose:
                 print(cmd_list)
-                print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
-                      resp.stderr.decode("utf-8"))
+            resp = Experiment.runshell(cmd_list)
+            print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
+                    resp.stderr.decode("utf-8"))
 
 class LxdExperiment(Experiment):
     VIRT = spawn.find_executable("lxd")
@@ -245,19 +244,19 @@ class LxdExperiment(Experiment):
         dst = "{0}/etc/opt/ipop-vpn/config.json".format(container)
         cmd_list = [LxdExperiment.VIRT, "file", "push", cfg_file, dst]
 
-        # resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(cmd_list)
+        # resp = Experiment.runshell(cmd_list)
          #   print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
          #       else resp.stderr.decode("utf-8"))
 
         cmd_list = [LxdExperiment.VIRT, "start", container]
 
-        #resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(cmd_list)
-        #    print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
-        #        else resp.stderr.decode("utf-8"))
+        #resp = Experiment.runshell(cmd_list)
+        #print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
+        #    else resp.stderr.decode("utf-8"))
 
     def end(self):
         pass
@@ -318,11 +317,10 @@ class DockerExperiment(Experiment):
         cmd_list = [DockerExperiment.VIRT, "run", opts, "-v", mount_cfg, "-v", mount_log,
                     args[0], args[1], "--name", container, img, cmd]
 
-        resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(cmd_list)
-            print(resp.stdout.decode("utf-8") if resp.returncode == 0
-                  else resp.stderr.decode("utf-8"))
+        resp = Experiment.runshell(cmd_list)
+        print(resp.stdout.decode("utf-8") if resp.returncode == 0 else resp.stderr.decode("utf-8"))
 
     def pull_image(self):
         cmd_list = [DockerExperiment.VIRT, "pull", "kcratie/ringroute:0.1"]
@@ -330,7 +328,7 @@ class DockerExperiment(Experiment):
         if self.args.verbose:
             print(resp)
 
-    def stop_range(self, mode="random"):
+    def stop_range(self):
         cnt = 0
         cmd_list = [DockerExperiment.VIRT, "stop"]
         sequence = self.seq_list
@@ -339,11 +337,11 @@ class DockerExperiment(Experiment):
             inst = "{0:03}".format(inst)
             container = DockerExperiment.CONTAINER.format(inst)
             cmd_list.append(container)
-        resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(cmd_list)
-            print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
-                  resp.stderr.decode("utf-8"))
+        resp = Experiment.runshell(cmd_list)
+        print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
+                resp.stderr.decode("utf-8"))
         print("{0} Docker container(s) terminated".format(cnt))
 
     def end(self):
@@ -351,6 +349,7 @@ class DockerExperiment(Experiment):
         self.stop_range()
 
     def run_ping(self, target_address):
+        fail_count = 0
         for inst in range(self.range_start, self.range_end):
             cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
             inst = "{0:03}".format(inst)
@@ -358,10 +357,13 @@ class DockerExperiment(Experiment):
             cmd_list.append(container)
             cmd_list += ["ping", "-c1"]
             cmd_list.append(target_address)
-            resp = Experiment.runshell(cmd_list)
             if self.args.verbose:
                 print(cmd_list)
-            print(resp.stdout.decode("utf-8"))
+            resp = Experiment.runshell(cmd_list)
+            if resp.returncode != 0:
+                fail_count += 1
+            print("ping ", target_address, "\n", resp.stdout.decode("utf-8"))
+        print("{0}/{1} failed".format(fail_count, (self.range_end - self.range_start)))
 
     def run_arp(self, target_address):
         for inst in range(self.range_start, self.range_end):
@@ -371,9 +373,9 @@ class DockerExperiment(Experiment):
             cmd_list.append(container)
             cmd_list += ["arping", "-C1"]
             cmd_list.append(target_address)
-            resp = Experiment.runshell(cmd_list)
             if self.args.verbose:
                 print(cmd_list)
+            resp = Experiment.runshell(cmd_list)
             print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
                     resp.stderr.decode("utf-8"))
 
