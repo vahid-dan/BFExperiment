@@ -2,10 +2,10 @@
   "CFx": {
     "Model": "Default",
     "Overlays": [ "101000F" ],
-    "NodeId": "a000###feb6040628e5fb7e70b04f###"
+    "NodeId": "c0ff###"
   },
   "Logger": {
-    "LogLevel": "INFO",
+    "LogLevel": "DEBUG",
     "Device": "File",
     "Directory": "/var/log/ipop-vpn/",
     "CtrlLogFileName": "ctrl.log",
@@ -26,12 +26,12 @@
     }
   },
   "Topology": {
-    "PeerDiscoveryCoalesce": 9,
+    "PeerDiscoveryCoalesce": 64,
     "Overlays": {
       "101000F": {
         "Name": "ApplicationOverlay",
         "Description": "Scalable Structured Ring Overlay",
-        "MaxSuccessors": 1,
+        "MaxSuccessors": 2,
         "MaxOnDemandEdges": 1,
         "MaxConcurrentEdgeSetup": 5,
         "Role": "Switch"
