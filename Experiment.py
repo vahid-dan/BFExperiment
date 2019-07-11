@@ -214,14 +214,14 @@ class LxdExperiment(Experiment):
     def gen_config(self, range_start, range_end):
         with open(self.template_file) as fd:
             template = json.load(fd)
-        node_id = template["CFx"].get("NodeId", "c0ff###")
+        node_id = template["CFx"].get("NodeId", "a000###feb6040628e5fb7e70b04f###")
         node_name = template["OverlayVisualizer"].get("NodeName", "dkr##")
         node_ip = template["BridgeController"]["Overlays"]["101000F"].get("IP4", "10.10.100.##")
 
         for val in range(range_start, range_end):
             rng_str = str(val)
             cfg_file = "{0}{1}.json".format(self.config_file_base, val)
-            node_id = "{0}{1}".format(node_id[:5], rng_str)
+            node_id = "{0}{1}{2}{1}{3}".format(node_id[:4], rng_str, node_id[7:29], node_id[32:])
             node_name = "{0}{1}".format(node_name[:3], rng_str)
             node_ip = "{0}{1}".format(node_ip[:10], rng_str)
 
@@ -276,15 +276,14 @@ class DockerExperiment(Experiment):
     def gen_config(self, range_start, range_end):
         with open(self.template_file) as fd:
             template = json.load(fd)
-        node_id = template["CFx"].get("NodeId", "c0ff###")
+        node_id = template["CFx"].get("NodeId", "a000###feb6040628e5fb7e70b04f###")
         node_name = template["OverlayVisualizer"].get("NodeName", "dkr###")
         node_ip = template["BridgeController"]["Overlays"]["101000F"].get("IP4", "10.10.100.###")
 
         for val in range(range_start, range_end):
             rng_str = "{0:03}".format(val)
             cfg_file = "{0}{1}.json".format(self.config_file_base, rng_str)
-            #node_id = "{0}{1}{2}{1}{3}".format(node_id[:4], rng_str, node_id[7:29], node_id[32:])
-            node_id = "{0}{1}".format(node_id[:4], rng_str)
+            node_id = "{0}{1}{2}{1}{3}".format(node_id[:4], rng_str, node_id[7:29], node_id[32:])
             node_name = "{0}{1}".format(node_name[:3], rng_str)
             node_ip = "{0}{1}".format(node_ip[:10], val)
 
