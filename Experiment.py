@@ -44,7 +44,7 @@ class Experiment():
         parser.add_argument("--setup", action="store_true", default=False, dest="setup",
                             help="Installs software requirements. Requires run as root.")
         parser.add_argument("--pull", action="store_true", default=False, dest="pull",
-                            help="Pulls the kcratie/ringroute:0.1 image from docker hub")
+                            help="Pulls the kcratie/bounded-flood:0.1 image from docker hub")
         parser.add_argument("--lxd", action="store_true", default=False, dest="lxd",
                             help="Uses LXC containers")
         parser.add_argument("--dkr", action="store_true", default=False, dest="dkr",
@@ -312,7 +312,7 @@ class DockerExperiment(Experiment):
         mount_log = "{0}/:/var/log/ipop-vpn/".format(log_dir)
         args = ["--rm", "--privileged"]
         opts = "-d"
-        img = "kcratie/ringroute:0.1"
+        img = "kcratie/bounded-flood:0.1"
         cmd = "/sbin/init"
 
         cmd_list = [DockerExperiment.VIRT, "run", opts, "-v", mount_cfg, "-v", mount_log,
@@ -324,7 +324,7 @@ class DockerExperiment(Experiment):
         print(resp.stdout.decode("utf-8") if resp.returncode == 0 else resp.stderr.decode("utf-8"))
 
     def pull_image(self):
-        cmd_list = [DockerExperiment.VIRT, "pull", "kcratie/ringroute:0.1"]
+        cmd_list = [DockerExperiment.VIRT, "pull", "kcratie/bounded-flood:0.1"]
         resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(resp)
