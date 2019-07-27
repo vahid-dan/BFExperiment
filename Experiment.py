@@ -1,3 +1,4 @@
+# pylint: disable=missing-docstring
 try:
     import simplejson as json
 except ImportError:
@@ -13,7 +14,6 @@ import shutil
 import time
 from abc import ABCMeta, abstractmethod
 
-
 class Experiment():
     __metaclass__ = ABCMeta
 
@@ -24,6 +24,7 @@ class Experiment():
     VIRT = NotImplemented
     APT = spawn.find_executable("apt-get")
     CONTAINER = NotImplemented
+    BF_VIRT_IMG = "kcratie/bounded-flood:0.2"
 
     def __init__(self, exp_dir=None):
         parser = argparse.ArgumentParser(description="Configures and runs Ken's PhD Experiment")
@@ -44,7 +45,8 @@ class Experiment():
         parser.add_argument("--setup", action="store_true", default=False, dest="setup",
                             help="Installs software requirements. Requires run as root.")
         parser.add_argument("--pull", action="store_true", default=False, dest="pull",
-                            help="Pulls the kcratie/bounded-flood:0.1 image from docker hub")
+                            help="Pulls the {} image from docker hub"
+                            .format(Experiment.BF_VIRT_IMG))
         parser.add_argument("--lxd", action="store_true", default=False, dest="lxd",
                             help="Uses LXC containers")
         parser.add_argument("--dkr", action="store_true", default=False, dest="dkr",
@@ -53,6 +55,8 @@ class Experiment():
                             help="Ping the specified address from each container")
         parser.add_argument("--arp", action="store", dest="arp",
                             help="arPing the specified address from each container")
+        parser.add_argument("--ipop", action="store", dest="ipop",
+                            help="Perform the specified service action: stop/start/restart")
 
         self.args = parser.parse_args()
         self.range_end = Experiment.RANGE_END
@@ -66,6 +70,7 @@ class Experiment():
         if not self.exp_dir:
             self.exp_dir = os.path.abspath(".")
         self.template_file = "{0}/template-config.json".format(self.exp_dir)
+        self.template_bf_file = "{0}/template-bf-config.json".format(self.exp_dir)
         self.config_dir = "{0}/config".format(self.exp_dir)
         self.cores_dir = "{0}/cores".format(self.exp_dir)
         self.logs_dir = "{0}/log".format(self.exp_dir)
@@ -74,8 +79,8 @@ class Experiment():
         self.range_file = "{0}/range_file".format(self.exp_dir)
 
         if not self.args.range and os.path.isfile("range_file"):
-            with open(self.range_file) as fr:
-                rng = fr.read().strip().rsplit(",", 2)
+            with open(self.range_file) as rng_fle:
+                rng = rng_fle.read().strip().rsplit(",", 2)
                 self.range_end = int(rng[1])
                 self.range_start = int(rng[0])
         self.total_inst = self.range_end - self.range_start
@@ -86,8 +91,8 @@ class Experiment():
         """ Run a shell command. if fails, raise an exception. """
         if cmd[0] is None:
             raise ValueError("No executable specified to run")
-        p = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return p
+        resp = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        return resp
 
     @property
     @abstractmethod
@@ -126,8 +131,8 @@ class Experiment():
                 print("Removed dir {}".format(self.cores_dir))
 
     def configure(self):
-        with open(self.range_file, "w") as fd:
-            fd.write(self.args.range)
+        with open(self.range_file, "w") as rng_fle:
+            rng_fle.write(self.args.range)
         self.gen_config(self.range_start, self.range_end)
         self.gen_rand_seq()
 
@@ -141,17 +146,17 @@ class Experiment():
                 self.seq_list[count] = inst
                 count += 1
 
-        with open(self.seq_file, "wb") as fd:
-            pickle.dump(self.seq_list, fd)
-            fd.flush()
+        with open(self.seq_file, "wb") as seq_fle:
+            pickle.dump(self.seq_list, seq_fle)
+            seq_fle.flush()
         if self.args.verbose:
             print("Startup sequence generated, {0} entries, {1} total attempts\n{2}"
                   .format(self.total_inst, total_attempts, self.seq_list))
 
     def load_seq_list(self):
         if os.path.isfile(self.seq_file):
-            with open(self.seq_file, "rb") as fd:
-                self.seq_list = pickle.load(fd)
+            with open(self.seq_file, "rb") as seq_fle:
+                self.seq_list = pickle.load(seq_fle)
                 if len(self.seq_list) != self.total_inst:
                     print("Warning: the number of entries in sequence list does not match the "
                           "configured experiment range. {0}!={1}".
@@ -165,7 +170,7 @@ class Experiment():
     def start_range(self, num, wait):
         cnt = 0
         sequence = self.seq_list
-        for inst in sequence[self.range_start-1:self.range_end-1]:
+        for inst in sequence:
             self.start_instance(inst)
             cnt += 1
             if cnt % num == 0 and cnt < len(sequence):
@@ -202,7 +207,7 @@ class Experiment():
                 print(cmd_list)
             resp = Experiment.runshell(cmd_list)
             print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
-                    resp.stderr.decode("utf-8"))
+                  resp.stderr.decode("utf-8"))
 
 class LxdExperiment(Experiment):
     VIRT = spawn.find_executable("lxd")
@@ -212,11 +217,13 @@ class LxdExperiment(Experiment):
         super().__init__(exp_dir=exp_dir)
 
     def gen_config(self, range_start, range_end):
-        with open(self.template_file) as fd:
-            template = json.load(fd)
+        with open(self.template_file) as cfg_tmpl:
+            template = json.load(cfg_tmpl)
+        olid = template["CFx"].get("OverlayId", None)
+        olid = olid[0]
         node_id = template["CFx"].get("NodeId", "a000###feb6040628e5fb7e70b04f###")
         node_name = template["OverlayVisualizer"].get("NodeName", "dkr##")
-        node_ip = template["BridgeController"]["Overlays"]["101000F"].get("IP4", "10.10.100.##")
+        node_ip = template["BridgeController"]["Overlays"][olid].get("IP4", "10.10.100.##")
 
         for val in range(range_start, range_end):
             rng_str = str(val)
@@ -227,11 +234,11 @@ class LxdExperiment(Experiment):
 
             template["CFx"]["NodeId"] = node_id
             template["OverlayVisualizer"]["NodeName"] = node_name
-            template["BridgeController"]["Overlays"]["101000F"]["IP4"] = node_ip
+            template["BridgeController"]["Overlays"][olid]["IP4"] = node_ip
             os.makedirs(self.config_dir, exist_ok=True)
-            with open(cfg_file, "w") as f:
-                json.dump(template, f, indent=2)
-                f.flush()
+            with open(cfg_file, "w") as cfg_fle:
+                json.dump(template, cfg_fle, indent=2)
+                cfg_fle.flush()
         if self.args.verbose:
             print("{0} config file(s) generated".format(range_end-range_start))
 
@@ -274,11 +281,13 @@ class DockerExperiment(Experiment):
     #    self.pull_image()
 
     def gen_config(self, range_start, range_end):
-        with open(self.template_file) as fd:
-            template = json.load(fd)
+        with open(self.template_file) as cfg_tmpl:
+            template = json.load(cfg_tmpl)
+        olid = template["CFx"].get("Overlays", None)
+        olid = olid[0]
         node_id = template["CFx"].get("NodeId", "a000###feb6040628e5fb7e70b04f###")
         node_name = template["OverlayVisualizer"].get("NodeName", "dkr###")
-        node_ip = template["BridgeController"]["Overlays"]["101000F"].get("IP4", "10.10.100.###")
+        node_ip = template["BridgeController"]["Overlays"][olid].get("IP4", "10.10.100.###")
 
         for val in range(range_start, range_end):
             rng_str = "{0:03}".format(val)
@@ -289,11 +298,23 @@ class DockerExperiment(Experiment):
 
             template["CFx"]["NodeId"] = node_id
             template["OverlayVisualizer"]["NodeName"] = node_name
-            template["BridgeController"]["Overlays"]["101000F"]["IP4"] = node_ip
+            template["BridgeController"]["Overlays"][olid]["IP4"] = node_ip
             os.makedirs(self.config_dir, exist_ok=True)
-            with open(cfg_file, "w") as f:
-                json.dump(template, f, indent=2)
-                f.flush()
+            with open(cfg_file, "w") as cfg_fle:
+                json.dump(template, cfg_fle, indent=2)
+                cfg_fle.flush()
+        if self.args.verbose:
+            print("{0} config file(s) generated".format(range_end-range_start))
+        self.gen_bf_config()
+
+    def gen_bf_config(self):
+        with open(self.template_bf_file) as cfg_tmpl:
+            template = json.load(cfg_tmpl)
+            cfg_file = "{0}{1}.json".format(self.config_file_base, "bf-cfg")
+            with open(cfg_file, "w") as cfg_fle:
+                json.dump(template, cfg_fle, indent=2)
+                cfg_fle.flush()
+
         if self.args.verbose:
             print("{0} config file(s) generated".format(range_end-range_start))
 
@@ -311,19 +332,40 @@ class DockerExperiment(Experiment):
         mount_log = "{0}/:/var/log/ipop-vpn/".format(log_dir)
         args = ["--rm", "--privileged"]
         opts = "-d"
-        img = "kcratie/bounded-flood:0.1"
+        img = Experiment.BF_VIRT_IMG
         cmd = "/sbin/init"
-
-        cmd_list = [DockerExperiment.VIRT, "run", opts, "-v", mount_cfg, "-v", mount_log,
-                    args[0], args[1], "--name", container, img, cmd]
+        bf_cfg_file = "{0}{1}.json".format(self.config_file_base, "bf-cfg")
+        mount_bf_cfg = "{0}:/etc/opt/ipop-vpn/bf-cfg.json".format(bf_cfg_file)
+        cmd_list = [DockerExperiment.VIRT, "run", opts, "-v", mount_cfg, "-v", mount_log, "-v",
+                    mount_bf_cfg, args[0], args[1], "--name", container, img, cmd]
 
         if self.args.verbose:
             print(cmd_list)
         resp = Experiment.runshell(cmd_list)
         print(resp.stdout.decode("utf-8") if resp.returncode == 0 else resp.stderr.decode("utf-8"))
 
+    def run_cmd(self, cmd_line):
+        report = dict(fail_count=0, fail_node=[])
+        for inst in range(self.range_start, self.range_end):
+            cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
+            inst = "{0:03}".format(inst)
+            container = DockerExperiment.CONTAINER.format(inst)
+            cmd_list.append(container)
+            cmd_list += cmd_line
+            resp = Experiment.runshell(cmd_list)
+            if self.args.verbose:
+                print(cmd_list)
+                print(resp.stdout.decode("utf-8"))
+            if resp.returncode != 0:
+                report["fail_count"] += 1
+                report["fail_node"].append("node-{0}".format(inst))
+        rpt_msg = "{0}: {1}/{2} failed\n{3}".format(cmd_line, report["fail_count"],
+                                                    self.range_end - self.range_start,
+                                                    report["fail_node"])
+        print(rpt_msg)
+
     def pull_image(self):
-        cmd_list = [DockerExperiment.VIRT, "pull", "kcratie/bounded-flood:0.1"]
+        cmd_list = [DockerExperiment.VIRT, "pull", Experiment.BF_VIRT_IMG]
         resp = Experiment.runshell(cmd_list)
         if self.args.verbose:
             print(resp)
@@ -332,7 +374,7 @@ class DockerExperiment(Experiment):
         cnt = 0
         cmd_list = [DockerExperiment.VIRT, "stop"]
         sequence = self.seq_list
-        for inst in sequence[self.range_start-1:self.range_end-1]:
+        for inst in sequence:
             cnt += 1
             inst = "{0:03}".format(inst)
             container = DockerExperiment.CONTAINER.format(inst)
@@ -341,15 +383,16 @@ class DockerExperiment(Experiment):
             print(cmd_list)
         resp = Experiment.runshell(cmd_list)
         print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
-                resp.stderr.decode("utf-8"))
+              resp.stderr.decode("utf-8"))
         print("{0} Docker container(s) terminated".format(cnt))
 
     def end(self):
         self.load_seq_list()
+        self.run_cmd(["systemctl", "stop", "ipop"])
         self.stop_range()
 
     def run_ping(self, target_address):
-        fail_count = 0
+        report = dict(fail_count=0, fail_node=[])
         for inst in range(self.range_start, self.range_end):
             cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
             inst = "{0:03}".format(inst)
@@ -357,13 +400,17 @@ class DockerExperiment(Experiment):
             cmd_list.append(container)
             cmd_list += ["ping", "-c1"]
             cmd_list.append(target_address)
+            resp = Experiment.runshell(cmd_list)
             if self.args.verbose:
                 print(cmd_list)
-            resp = Experiment.runshell(cmd_list)
+                print("ping ", target_address, "\n", resp.stdout.decode("utf-8"))
             if resp.returncode != 0:
-                fail_count += 1
-            print("ping ", target_address, "\n", resp.stdout.decode("utf-8"))
-        print("{0}/{1} failed".format(fail_count, (self.range_end - self.range_start)))
+                report["fail_count"] += 1
+                report["fail_node"].append("node-{0}".format(inst))
+        rpt_msg = "ping {0}: {1}/{2} failed\n{3}".format(target_address, report["fail_count"],
+                                                         self.range_end - self.range_start,
+                                                         report["fail_node"])
+        print(rpt_msg)
 
     def run_arp(self, target_address):
         for inst in range(self.range_start, self.range_end):
@@ -377,9 +424,19 @@ class DockerExperiment(Experiment):
                 print(cmd_list)
             resp = Experiment.runshell(cmd_list)
             print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
-                    resp.stderr.decode("utf-8"))
+                  resp.stderr.decode("utf-8"))
 
-def main():
+    def run_svc_ctl(self, svc_ctl):
+        if svc_ctl == "stop":
+            self.run_cmd(["systemctl", "stop", "ipop"])
+        elif svc_ctl == "start":
+            self.run_cmd(["systemctl", "start", "ipop"])
+        elif svc_ctl == "restart":
+            self.run_cmd(["systemctl", "restart", "ipop"])
+        else:
+            print("Invalid service control specified, only accepts start/stop/restart")
+
+def main(): # pylint: disable=too-many-return-statements
     exp = DockerExperiment()
     if exp.args.lxd:
         exp = LxdExperiment()
@@ -425,5 +482,8 @@ def main():
         exp.run_arp(exp.args.arp)
         return
 
+    if exp.args.ipop:
+        exp.run_svc_ctl(exp.args.ipop)
+        return
 if __name__ == "__main__":
     main()

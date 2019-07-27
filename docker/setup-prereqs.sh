@@ -1,10 +1,10 @@
 #!/bin/bash
 
-systemctl mask getty@tty1.service
-mkdir -p /opt/ipop-vpn/.pip_cache
-cd /opt/ipop-vpn
-pip3 --cache-dir /opt/ipop-vpn/.pip_cache install virtualenv
-virtualenv ipop-venv
-source ipop-venv/bin/activate
-pip3 --cache-dir /opt/ipop-vpn/.pip_cache install psutil sleekxmpp requests simplejson ryu
+systemctl mask getty@tty1.service && \
+mkdir -p /opt/ipop-vpn && \
+cd /opt/ipop-vpn && \
+pip3 --no-cache-dir install virtualenv  && \
+virtualenv --python=python3.6 ipop-venv && \
+source ipop-venv/bin/activate && \
+pip3 --no-cache-dir install psutil==5.6.3 sleekxmpp==1.3.3 requests==2.21.0 simplejson==3.16.0 ryu==4.30 && \
 deactivate

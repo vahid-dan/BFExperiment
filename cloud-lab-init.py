@@ -31,9 +31,6 @@ request = pc.makeRequestRSpec()
 node = request.RawPC('node')
 node.disk_image = 'urn:publicid:IDN+utah.cloudlab.us+image+xos-PG0:Ubuntu18.04-amd64-20190107'
 
-# Install and execute scripts on the node
-node.addService(pg.Install(url="https://www.dropbox.com/s/ovymugh123lva47/bf-exp.tar.gz", path="/local"))
-
 # Set the Site
 node.Site('Site 1')
 

@@ -36,6 +36,8 @@
     <Content Include="docker\setup-prereqs.sh" />
     <Content Include="setup-services.sh" />
     <Content Include="setup-system.sh" />
+    <Content Include="setup.sh" />
+    <Content Include="template-bf-config.json" />
     <Content Include="template-config.json" />
     <Content Include="update-limits.sh" />
   </ItemGroup>

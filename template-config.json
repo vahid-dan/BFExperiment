@@ -2,7 +2,7 @@
   "CFx": {
     "Model": "Default",
     "Overlays": [ "101000F" ],
-    "NodeId": "a000###feb6040628e5fb7e70b04f###"
+    "NodeId": "a100###feb6040628e5fb7e70b04f###"
   },
   "Logger": {
     "LogLevel": "DEBUG",
@@ -29,11 +29,11 @@
     "PeerDiscoveryCoalesce": 64,
     "Overlays": {
       "101000F": {
-        "Name": "ApplicationOverlay",
-        "Description": "Scalable Structured Ring Overlay",
+        "Name": "SymphonyRing",
+        "Description": "Scalable Symphony Ring Overlay for Bounded Flooding.",
         "MaxSuccessors": 2,
         "MaxOnDemandEdges": 1,
-        "MaxConcurrentEdgeSetup": 5,
+        "MaxConcurrentEdgeSetup": 2,
         "Role": "Switch"
       }
     }
@@ -57,13 +57,13 @@
   "BridgeController": {
     "Dependencies": [ "Logger", "LinkManager" ],
     "SdnListenAddress": "",
-    "SdnListenPort": 5802,    
+    "SdnListenPort": 5802,
     "Overlays": {
       "101000F": {
         "Type": "OVS",
         "BridgeName": "ipopbr",
         "IP4": "10.10.100.###",
-        "PrefixLen": 24,
+        "PrefixLen": 16,
         "MTU": 1410,
         "STP": false,
         "AutoDelete": true,
