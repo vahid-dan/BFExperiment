@@ -57,6 +57,9 @@ class Experiment():
                             help="arPing the specified address from each container")
         parser.add_argument("--ipop", action="store", dest="ipop",
                             help="Perform the specified service action: stop/start/restart")
+        parser.add_argument("--churn", action="store", dest="churn",
+                            help="Restarts the specified amount of nodes in the overlay,"
+                            "one every interval")
 
         self.args = parser.parse_args()
         self.range_end = Experiment.RANGE_END
@@ -209,6 +212,29 @@ class Experiment():
             print(resp.stdout.decode("utf-8") if resp.returncode == 0 else
                   resp.stderr.decode("utf-8"))
 
+    @abstractmethod
+    def run_container_cmd(self, cmd_line, instance_num):
+        pass
+
+    def churn(self, param):
+        params = self.args.range.rsplit(",", 2)
+        cc = int(params[0])
+        inval = int(params[1])
+        self._churn(cc, inval)
+
+    def _churn(self, churn_count=0, interval=30):
+        if churn_count == 0:
+            churn_count = self.range_end - self.range_start
+        sequence = self.seq_list
+        cnt = 0
+        for inst in sequence:
+            if cnt >= churn_count:
+                return
+            self.run_container_cmd(["systemctl", "stop", "ipop"], inst)
+            time.sleep(interval)
+            self.run_container_cmd(["systemctl", "start", "ipop"], inst)
+            cnt += 1
+
 class LxdExperiment(Experiment):
     VIRT = spawn.find_executable("lxd")
     CONTAINER = "ipop-lxd{0}"
@@ -275,10 +301,16 @@ class DockerExperiment(Experiment):
 
     def __init__(self, exp_dir=None):
         super().__init__(exp_dir=exp_dir)
+        self.network_name = "dkrnet"
 
     #def configure(self):
     #    super().configure()
     #    self.pull_image()
+
+    def create_network(self):
+        #netid=docker network ls | grep dkrnet | awk 'BEGIN { FS=" "} {print $2}'
+        #docker network create dkrnet
+        pass
 
     def gen_config(self, range_start, range_end):
         with open(self.template_file) as cfg_tmpl:
@@ -316,7 +348,7 @@ class DockerExperiment(Experiment):
                 cfg_fle.flush()
 
         if self.args.verbose:
-            print("{0} config file(s) generated".format(range_end-range_start))
+            print("BoundedFlood config file(s) generated")
 
     def start_instance(self, instance):
         instance = "{0:03}".format(instance)
@@ -337,14 +369,33 @@ class DockerExperiment(Experiment):
         bf_cfg_file = "{0}{1}.json".format(self.config_file_base, "bf-cfg")
         mount_bf_cfg = "{0}:/etc/opt/ipop-vpn/bf-cfg.json".format(bf_cfg_file)
         cmd_list = [DockerExperiment.VIRT, "run", opts, "-v", mount_cfg, "-v", mount_log, "-v",
-                    mount_bf_cfg, args[0], args[1], "--name", container, img, cmd]
-
+                    mount_bf_cfg, args[0], args[1], "--name", container, "--network",
+                    self.network_name, img, cmd]
         if self.args.verbose:
             print(cmd_list)
         resp = Experiment.runshell(cmd_list)
         print(resp.stdout.decode("utf-8") if resp.returncode == 0 else resp.stderr.decode("utf-8"))
 
-    def run_cmd(self, cmd_line):
+    def run_container_cmd(self, cmd_line, instance_num):
+        #report = dict(fail_count=0, fail_node=[])
+        cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
+        inst = "{0:03}".format(instance_num)
+        container = DockerExperiment.CONTAINER.format(inst)
+        cmd_list.append(container)
+        cmd_list += cmd_line
+        resp = Experiment.runshell(cmd_list)
+        #if self.args.verbose:
+        #    print(cmd_list)
+        #    print(resp.stdout.decode("utf-8"))
+        #if resp.returncode != 0:
+        #    report["fail_count"] += 1
+        #    report["fail_node"].append("node-{0}".format(inst))
+        #rpt_msg = "{0}: {1}/{2} failed\n{3}".format(cmd_line, report["fail_count"],
+        #                                            self.range_end - self.range_start,
+        #                                            report["fail_node"])
+        #print(rpt_msg)
+
+    def run_cmd_on_range(self, cmd_line):
         report = dict(fail_count=0, fail_node=[])
         for inst in range(self.range_start, self.range_end):
             cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
@@ -372,7 +423,7 @@ class DockerExperiment(Experiment):
 
     def stop_range(self):
         cnt = 0
-        cmd_list = [DockerExperiment.VIRT, "stop"]
+        cmd_list = [DockerExperiment.VIRT, "kill"]
         sequence = self.seq_list
         for inst in sequence:
             cnt += 1
@@ -388,7 +439,7 @@ class DockerExperiment(Experiment):
 
     def end(self):
         self.load_seq_list()
-        self.run_cmd(["systemctl", "stop", "ipop"])
+        self.run_cmd_on_range(["systemctl", "stop", "ipop"])
         self.stop_range()
 
     def run_ping(self, target_address):
@@ -428,11 +479,11 @@ class DockerExperiment(Experiment):
 
     def run_svc_ctl(self, svc_ctl):
         if svc_ctl == "stop":
-            self.run_cmd(["systemctl", "stop", "ipop"])
+            self.run_cmd_on_range(["systemctl", "stop", "ipop"])
         elif svc_ctl == "start":
-            self.run_cmd(["systemctl", "start", "ipop"])
+            self.run_cmd_on_range(["systemctl", "start", "ipop"])
         elif svc_ctl == "restart":
-            self.run_cmd(["systemctl", "restart", "ipop"])
+            self.run_cmd_on_range(["systemctl", "restart", "ipop"])
         else:
             print("Invalid service control specified, only accepts start/stop/restart")
 
@@ -484,6 +535,10 @@ def main(): # pylint: disable=too-many-return-statements
 
     if exp.args.ipop:
         exp.run_svc_ctl(exp.args.ipop)
+        return
+
+    if exp.args.churn:
+        exp.churn(exp.args.churn)
         return
 if __name__ == "__main__":
     main()

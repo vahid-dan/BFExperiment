@@ -16,7 +16,7 @@ function prereqs
   curl -fsSL https://download.docker.com/linux/ubuntu/gpg | apt-key add -
   add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu bionic stable"
   apt-cache policy docker-ce
-  apt-get install -y containerd.io=5:18.09.7~3-0~ubuntu-bionic \
+  apt-get install -y containerd.io=1.2.6-3 \
                      docker-ce-cli=5:18.09.7~3-0~ubuntu-bionic \
                      docker-ce=5:18.09.7~3-0~ubuntu-bionic
 

@@ -17,9 +17,9 @@
     "Enabled": true,
     "Overlays": {
       "101000F": {
-        "HostAddress": "34.209.33.166",
+        "HostAddress": "104.211.19.232",
         "Port": "5222",
-        "Username": "ken01@openfire.local",
+        "Username": "ken01@extsvcs",
         "Password": "psswd01",
         "AuthenticationMethod": "PASSWORD"
       }
