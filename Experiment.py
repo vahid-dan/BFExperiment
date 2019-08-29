@@ -13,6 +13,56 @@ import argparse
 import shutil
 import time
 from abc import ABCMeta, abstractmethod
+import ipaddress
+
+class TestLinkUtilization():
+    def __init__(self):
+        self.ip4net1 = ipaddress.IPv4Network('10.10.1.0/24')
+        self.ip4net2 = ipaddress.IPv4Network('10.10.2.0/24')
+        self.ip4net3 = ipaddress.IPv4Network('10.10.3.0/24')
+        self.num_addrs = 75
+        self.num_cases = 300
+        self.case_list = [None]*(self.num_cases)
+        self.ip_list = []
+        for i in range(1, self.num_addrs+1):
+            self.ip_list.append(self.ip4net1[i])
+        for i in range(1, self.num_addrs+1):
+            self.ip_list.append(self.ip4net2[i])
+        for i in range(1, self.num_addrs+1):
+            self.ip_list.append(self.ip4net3[i])
+
+    def _gen_node_pairs(self):
+        count = 0
+        total_attempts = 0
+        while count < self.num_cases:
+            total_attempts += 1
+            case = (random.choice(range(self.num_addrs*3)), random.choice(range(self.num_addrs*3)))
+            if case not in self.case_list:
+                self.case_list[count] = case
+                count += 1
+
+    def _stor_host_cases(self):
+        fl1 = open("host1-cases", "w")
+        fl2 = open("host2-cases", "w")
+        fl3 = open("host3-cases", "w")
+        for case in self.case_list:
+            ip_case = (self.ip_list[case[0]], self.ip_list[case[1]])
+            if case[0] < self.num_addrs:
+                inst = (case[0] + 1) % (self.num_addrs+1)
+                fl1.write("{0:0>3d} {1} {2}\n".format(inst, str(ip_case[0]), str(ip_case[1])))
+            elif case[0] < 2*self.num_addrs:
+                inst = (case[0] - self.num_addrs+1) % (self.num_addrs+1)
+                fl2.write("{0:0>3d} {1} {2}\n".format(inst, str(ip_case[0]), str(ip_case[1])))
+            elif case[0] < 3*self.num_addrs:
+                inst = (case[0] - (2*self.num_addrs)+1) % (self.num_addrs+1)
+                fl3.write("{0:0>3d} {1} {2}\n".format(inst, str(ip_case[0]), str(ip_case[1])))
+        fl1.close()
+        fl2.close()
+        fl3.close()
+
+    def run(self):
+        self._gen_node_pairs()
+        self._stor_host_cases()
 
 class Experiment():
     __metaclass__ = ABCMeta
@@ -60,6 +110,9 @@ class Experiment():
         parser.add_argument("--churn", action="store", dest="churn",
                             help="Restarts the specified amount of nodes in the overlay,"
                             "one every interval")
+        parser.add_argument("--test", action="store", dest="test",
+                            help="Performs latency and bandwidth test between random pairs of "
+                            "nodes. Ex test=<test_name>")
 
         self.args = parser.parse_args()
         self.range_end = Experiment.RANGE_END
@@ -77,6 +130,7 @@ class Experiment():
         self.config_dir = "{0}/config".format(self.exp_dir)
         self.cores_dir = "{0}/cores".format(self.exp_dir)
         self.logs_dir = "{0}/log".format(self.exp_dir)
+        self.data_dir = "{0}/test-link-utilization".format(self.exp_dir)
         self.config_file_base = "{0}/config-".format(self.config_dir)
         self.seq_file = "{0}/startup.list".format(self.exp_dir)
         self.range_file = "{0}/range_file".format(self.exp_dir)
@@ -235,65 +289,11 @@ class Experiment():
             self.run_container_cmd(["systemctl", "start", "ipop"], inst)
             cnt += 1
 
-class LxdExperiment(Experiment):
-    VIRT = spawn.find_executable("lxd")
-    CONTAINER = "ipop-lxd{0}"
-
-    def __init__(self, exp_dir=None):
-        super().__init__(exp_dir=exp_dir)
-
-    def gen_config(self, range_start, range_end):
-        with open(self.template_file) as cfg_tmpl:
-            template = json.load(cfg_tmpl)
-        olid = template["CFx"].get("OverlayId", None)
-        olid = olid[0]
-        node_id = template["CFx"].get("NodeId", "a000###feb6040628e5fb7e70b04f###")
-        node_name = template["OverlayVisualizer"].get("NodeName", "dkr##")
-        node_ip = template["BridgeController"]["Overlays"][olid].get("IP4", "10.10.100.##")
-
-        for val in range(range_start, range_end):
-            rng_str = str(val)
-            cfg_file = "{0}{1}.json".format(self.config_file_base, val)
-            node_id = "{0}{1}{2}{1}{3}".format(node_id[:4], rng_str, node_id[7:29], node_id[32:])
-            node_name = "{0}{1}".format(node_name[:3], rng_str)
-            node_ip = "{0}{1}".format(node_ip[:10], rng_str)
-
-            template["CFx"]["NodeId"] = node_id
-            template["OverlayVisualizer"]["NodeName"] = node_name
-            template["BridgeController"]["Overlays"][olid]["IP4"] = node_ip
-            os.makedirs(self.config_dir, exist_ok=True)
-            with open(cfg_file, "w") as cfg_fle:
-                json.dump(template, cfg_fle, indent=2)
-                cfg_fle.flush()
-        if self.args.verbose:
-            print("{0} config file(s) generated".format(range_end-range_start))
-
-    def start_instance(self, instance):
-        container = LxdExperiment.CONTAINER.format(instance)
-        cfg_file = "{0}{1}.json".format(self.config_file_base, instance)
-        if not os.path.isfile(cfg_file):
-            self.gen_config(instance, instance+1)
-
-        dst = "{0}/etc/opt/ipop-vpn/config.json".format(container)
-        cmd_list = [LxdExperiment.VIRT, "file", "push", cfg_file, dst]
-
-        if self.args.verbose:
-            print(cmd_list)
-        # resp = Experiment.runshell(cmd_list)
-         #   print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
-         #       else resp.stderr.decode("utf-8"))
-
-        cmd_list = [LxdExperiment.VIRT, "start", container]
-
-        if self.args.verbose:
-            print(cmd_list)
-        #resp = Experiment.runshell(cmd_list)
-        #print(resp.stdout.decode("utf-8") if resp.returncode == 0 \
-        #    else resp.stderr.decode("utf-8"))
-
-    def end(self):
-        pass
-
+    def run_test(self, test_name):
+        test = None
+        if test_name == "linkutilization" or test_name == "lu":
+            test = TestLinkUtilization()
+        test.run()
 
 class DockerExperiment(Experiment):
     VIRT = spawn.find_executable("docker")
@@ -319,14 +319,15 @@ class DockerExperiment(Experiment):
         olid = olid[0]
         node_id = template["CFx"].get("NodeId", "a000###feb6040628e5fb7e70b04f###")
         node_name = template["OverlayVisualizer"].get("NodeName", "dkr###")
-        node_ip = template["BridgeController"]["Overlays"][olid].get("IP4", "10.10.100.###")
-
+        netwk = template["BridgeController"]["Overlays"][olid].get("IP4", "10.10.1.0/24")
+        netwk = ipaddress.IPv4Network(netwk)
         for val in range(range_start, range_end):
             rng_str = "{0:03}".format(val)
             cfg_file = "{0}{1}.json".format(self.config_file_base, rng_str)
             node_id = "{0}{1}{2}{1}{3}".format(node_id[:4], rng_str, node_id[7:29], node_id[32:])
             node_name = "{0}{1}".format(node_name[:3], rng_str)
-            node_ip = "{0}{1}".format(node_ip[:10], val)
+            node_ip = str(netwk[val])
+            #node_ip = "{0}{1}".format(node_ip[:10], val) 
 
             template["CFx"]["NodeId"] = node_id
             template["OverlayVisualizer"]["NodeName"] = node_name
@@ -362,6 +363,7 @@ class DockerExperiment(Experiment):
 
         mount_cfg = "{0}:/etc/opt/ipop-vpn/config.json".format(cfg_file)
         mount_log = "{0}/:/var/log/ipop-vpn/".format(log_dir)
+        mount_data = "{0}/:/var/ipop-vpn/".format(self.data_dir)
         args = ["--rm", "--privileged"]
         opts = "-d"
         img = Experiment.BF_VIRT_IMG
@@ -369,8 +371,8 @@ class DockerExperiment(Experiment):
         bf_cfg_file = "{0}{1}.json".format(self.config_file_base, "bf-cfg")
         mount_bf_cfg = "{0}:/etc/opt/ipop-vpn/bf-cfg.json".format(bf_cfg_file)
         cmd_list = [DockerExperiment.VIRT, "run", opts, "-v", mount_cfg, "-v", mount_log, "-v",
-                    mount_bf_cfg, args[0], args[1], "--name", container, "--network",
-                    self.network_name, img, cmd]
+                    mount_bf_cfg, "-v", mount_data, args[0], args[1], "--name", container,
+                    "--network", self.network_name, img, cmd]
         if self.args.verbose:
             print(cmd_list)
         resp = Experiment.runshell(cmd_list)
@@ -395,9 +397,30 @@ class DockerExperiment(Experiment):
         #                                            report["fail_node"])
         #print(rpt_msg)
 
+    #def run_cmd_on_range(self, cmd_line):
+    #    report = dict(fail_count=0, fail_node=[])
+    #    for inst in range(self.range_start, self.range_end):
+    #        cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
+    #        inst = "{0:03}".format(inst)
+    #        container = DockerExperiment.CONTAINER.format(inst)
+    #        cmd_list.append(container)
+    #        cmd_list += cmd_line
+    #        resp = Experiment.runshell(cmd_list)
+    #        if self.args.verbose:
+    #            print(cmd_list)
+    #            print(resp.stdout.decode("utf-8"))
+    #        if resp.returncode != 0:
+    #            report["fail_count"] += 1
+    #            report["fail_node"].append("node-{0}".format(inst))
+    #    rpt_msg = "{0}: {1}/{2} failed\n{3}".format(cmd_line, report["fail_count"],
+    #                                                self.range_end - self.range_start,
+    #                                                report["fail_node"])
+    #    print(rpt_msg)
+
     def run_cmd_on_range(self, cmd_line):
         report = dict(fail_count=0, fail_node=[])
-        for inst in range(self.range_start, self.range_end):
+        self.load_seq_list()
+        for inst in self.seq_list:
             cmd_list = [DockerExperiment.VIRT, "exec", "-it"]
             inst = "{0:03}".format(inst)
             container = DockerExperiment.CONTAINER.format(inst)
@@ -414,6 +437,7 @@ class DockerExperiment(Experiment):
                                                     self.range_end - self.range_start,
                                                     report["fail_node"])
         print(rpt_msg)
+
 
     def pull_image(self):
         cmd_list = [DockerExperiment.VIRT, "pull", Experiment.BF_VIRT_IMG]
@@ -540,5 +564,10 @@ def main(): # pylint: disable=too-many-return-statements
     if exp.args.churn:
         exp.churn(exp.args.churn)
         return
+
+    if exp.args.test:
+        exp.run_test(exp.args.test)
+        return
+
 if __name__ == "__main__":
     main()

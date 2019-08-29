@@ -29,7 +29,7 @@ request = pc.makeRequestRSpec()
 
 # Node node
 node = request.RawPC('node')
-node.disk_image = 'urn:publicid:IDN+utah.cloudlab.us+image+xos-PG0:Ubuntu18.04-amd64-20190107'
+node.disk_image = 'urn:publicid:IDN+emulab.net+image+emulab-ops:UBUNTU18-64-OSNM-Q'
 
 # Set the Site
 node.Site('Site 1')

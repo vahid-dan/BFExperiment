@@ -13,8 +13,7 @@
     <Name>BoundedFloodExperiment</Name>
     <RootNamespace>config-gen</RootNamespace>
     <LaunchProvider>Standard Python launcher</LaunchProvider>
-    <CommandLineArguments>
-    </CommandLineArguments>
+    <CommandLineArguments>--test=lu</CommandLineArguments>
     <EnableNativeCodeDebugging>False</EnableNativeCodeDebugging>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -28,12 +27,16 @@
   <ItemGroup>
     <Compile Include="cloud-lab-init.py" />
     <Compile Include="Experiment.py" />
+    <Compile Include="lxd-experiment.py">
+      <SubType>Code</SubType>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Content Include="docker\99fixbadproxy" />
     <Content Include="docker\ipop.Dockerfile" />
     <Content Include="docker\prereq.Dockerfile" />
     <Content Include="docker\setup-prereqs.sh" />
+    <Content Include="test-link-utilization\lu.sh" />
     <Content Include="setup-services.sh" />
     <Content Include="setup.sh" />
     <Content Include="template-bf-config.json" />
@@ -42,6 +45,7 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="docker\" />
+    <Folder Include="test-link-utilization\" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)\Python Tools\Microsoft.PythonTools.targets" />
   <!-- Uncomment the CoreCompile target to enable the Build command in

@@ -1,0 +1,78 @@
+{
+  "CFx": {
+    "Model": "Default",
+    "Overlays": [  "1010001" ]
+  },
+  "Logger": {
+    "Enabled": true,
+    "LogLevel": "DEBUG",
+    "Device": "File",
+    "Directory": "/var/log/ipop-vpn/",
+    "CtrlLogFileName": "ctrl.log",
+    "TincanLogFileName": "tincan_log",
+    "MaxFileSize": 5000000,
+    "MaxArchives": 5
+  
+  },
+  "TincanInterface": {
+    "Enabled": true
+  },
+  "Signal": {
+    "Enabled": true,
+    "Overlays": {
+      "1010001": {
+        "HostAddress": "",
+        "Port": "5222",
+        "Username": "",
+        "Password": "",
+        "AuthenticationMethod": "PASSWORD",
+        "AcceptUntrustedServer": true
+      }
+    }
+  },
+  "Topology": {
+    "Enabled": true,
+    "Overlays": {
+      "1010001": {
+        "Name": "Overlay1",
+        "Description": "IPOP v18 overlay"
+      }
+    }
+  },
+  "LinkManager": {
+    "Enabled": true,
+    "Stun": ["stun.l.google.com:19302", "stun1.l.google.com:19302"],
+    "Overlays": {
+      "1010001": {
+        "Type": "TUNNEL",
+        "TapName": "ipop"
+      }
+    }
+  },
+  "BridgeController": {
+    "Enabled": true,
+    "Overlays": {
+      "1010001": {
+        "Type": "OVS",
+        "BridgeName": "ipopbr0",
+        "IP4": "10.10.10.*",
+        "PrefixLen": 24,
+        "MTU": 1410
+      }
+    }
+  },
+  "OverlayVisualizer": {
+    "Enabled": false,
+    "TimerInterval": 15,
+    "WebServiceAddress": "***:5000"
+  },
+  "UsageReport": {
+    "Enabled": true
+  },
+  "Icc": {
+    "Enabled": false
+  },
+  "Broadcaster": {
+    "Enabled": false
+  }
+}

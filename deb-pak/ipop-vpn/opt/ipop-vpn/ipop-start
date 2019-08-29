@@ -1,0 +1,13 @@
+#! /bin/bash
+
+ipop_start() {
+    cd /opt/ipop-vpn
+    ./ipop-tincan &
+    source ipop-venv/bin/activate
+    python3 -m controller.Controller -c /etc/opt/ipop-vpn/config.json &
+    ryu-manager --log-file /var/log/ipop-vpn/bf.log --default-log-level 19 --nouse-stderr ./controller/modules/BoundedFlood.py &
+    iperf -s
+}
+
+ipop_start
+exit 0
